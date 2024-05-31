@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "KON.OctoScan.NET": {
-      "commandName": "Project",
-      "commandLineArgs": "--use_nit --eit --freq=378 --msys=dvbc --sr=6900 --mtype=256qam 172.31.255.185"
-    }
-  }
-}

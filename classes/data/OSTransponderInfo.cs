@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Data;
+using System.Text;
 
 using Newtonsoft.Json;
 using Pastel;
@@ -94,13 +95,13 @@ namespace KON.OctoScan.NET
                 if (osCurrentOSService != null)
                     return osCurrentOSService;
 
-                osCurrentOSService = new OSService { iServiceID = (ushort)iLocalServiceId, strServiceName = $"Service {iLocalServiceId}", strProviderName = "~", oloeOSListOSEvent = [] };
+                osCurrentOSService = new OSService { iServiceID = (ushort)iLocalServiceId, strName = $"Service {iLocalServiceId}", strProviderName = "~", oloeOSListOSEvent = [] };
                 otiLocalOSTransponderInfo.olosOSListOSService.Add(osCurrentOSService);
 
                 return osCurrentOSService;
             }
 
-            return new OSService { iServiceID = (ushort)iLocalServiceId, strServiceName = $"Service {iLocalServiceId}", strProviderName = "~", oloeOSListOSEvent = [] };
+            return new OSService { iServiceID = (ushort)iLocalServiceId, strName = $"Service {iLocalServiceId}", strProviderName = "~", oloeOSListOSEvent = [] };
         }
 
         public static void PrintServices(this OSTransponderInfo otiLocalOSTransponderInfo)
@@ -113,7 +114,7 @@ namespace KON.OctoScan.NET
                 {
                     lCurrentLogger.Info("SERVICE".Pastel(ConsoleColor.Green));
                     lCurrentLogger.Info($" PROVIDERNAME:  {osCurrentOSService.strProviderName}".Pastel(ConsoleColor.Green));
-                    lCurrentLogger.Info($" SERVICENAME:   {osCurrentOSService.strServiceName}".Pastel(ConsoleColor.Green));
+                    lCurrentLogger.Info($" SERVICENAME:   {osCurrentOSService.strName}".Pastel(ConsoleColor.Green));
                     lCurrentLogger.Info($" ONID:          {osCurrentOSService.iOriginalNetworkID}".Pastel(ConsoleColor.Green));
                     lCurrentLogger.Info($" TSID:          {osCurrentOSService.iTransportStreamID}".Pastel(ConsoleColor.Green));
                     lCurrentLogger.Info($" SID:           {osCurrentOSService.iServiceID}".Pastel(ConsoleColor.Green));
@@ -134,11 +135,11 @@ namespace KON.OctoScan.NET
 
                     for (int i = 0; i < osCurrentOSService.byAudioChannels; i += 1)
                     {
-                        if (osCurrentOSService.iaAudioPacketIdentifier[i] != 0)
+                        if (osCurrentOSService.iaAudioPacketIdentifiers[i] != 0)
                         {
-                            strCurrentPIDs += "," + Convert.ToString(osCurrentOSService.iaAudioPacketIdentifier[i]);
+                            strCurrentPIDs += "," + Convert.ToString(osCurrentOSService.iaAudioPacketIdentifiers[i]);
 
-                            if (osCurrentOSService.iaAudioPacketIdentifier[i] == iCurrentProgramClockReferencePacketIdentifier)
+                            if (osCurrentOSService.iaAudioPacketIdentifiers[i] == iCurrentProgramClockReferencePacketIdentifier)
                                 iCurrentProgramClockReferencePacketIdentifier = 0;
                         }
                     }
@@ -164,14 +165,14 @@ namespace KON.OctoScan.NET
 
                     lCurrentLogger.Info($" PIDS:          {strCurrentPIDs}".Pastel(ConsoleColor.Green));
 
-                    if (osCurrentOSService.byAudioChannels > 0 && osCurrentOSService.iaAudioPacketIdentifier[0] != 0)
+                    if (osCurrentOSService.byAudioChannels > 0 && osCurrentOSService.iaAudioPacketIdentifiers[0] != 0)
                     {
-                        var strCurrentAPIDs = Convert.ToString(osCurrentOSService.iaAudioPacketIdentifier[0]);
+                        var strCurrentAPIDs = Convert.ToString(osCurrentOSService.iaAudioPacketIdentifiers[0]);
 
                         for (int i = 1; i < osCurrentOSService.byAudioChannels; i += 1)
                         {
-                            if (osCurrentOSService.iaAudioPacketIdentifier[i] != 0)
-                                strCurrentAPIDs += "," + Convert.ToString(osCurrentOSService.iaAudioPacketIdentifier[i]);
+                            if (osCurrentOSService.iaAudioPacketIdentifiers[i] != 0)
+                                strCurrentAPIDs += "," + Convert.ToString(osCurrentOSService.iaAudioPacketIdentifiers[i]);
                         }
 
                         lCurrentLogger.Info($" APIDS:         {strCurrentAPIDs}".Pastel(ConsoleColor.Green));
@@ -185,7 +186,7 @@ namespace KON.OctoScan.NET
 
                     lCurrentLogger.Info($" EIT:           {osCurrentOSService.iEventInformationTablePresentFollowing}{osCurrentOSService.iEventInformationTableSchedule}".Pastel(ConsoleColor.Green));
                     lCurrentLogger.Info("END".Pastel(ConsoleColor.Green));
-                    lCurrentLogger.Info(Environment.NewLine.Pastel(ConsoleColor.Green));
+                    lCurrentLogger.Info(string.Empty.Pastel(ConsoleColor.Green));
                 }
             }
         }
@@ -194,8 +195,9 @@ namespace KON.OctoScan.NET
         {
             lCurrentLogger.Trace("OSTransponderInfo.ExportServicesToJson()".Pastel(ConsoleColor.Cyan));
 
-            var strCurrentServicexExport = JsonConvert.SerializeObject(otiLocalOSTransponderInfo.olosOSListOSService, Formatting.Indented, new JsonSerializerSettings { ContractResolver = new IgnorePropertiesResolver(["oloeOSListOSEvent", "bGotFromProgramMapTable", "bGotFromServiceDescriptorTable"]) });
-            lCurrentLogger.Info(strCurrentServicexExport.Pastel(ConsoleColor.Green));
+            var strCurrentServicesExport = JsonConvert.SerializeObject(otiLocalOSTransponderInfo.olosOSListOSService, Formatting.Indented, new JsonSerializerSettings { ContractResolver = new IgnorePropertiesResolver(["oloeOSListOSEvent", "bGotFromProgramMapTable", "bGotFromServiceDescriptorTable"]) });
+            DataTable dtCurrentServicesExportDataTable = (DataTable)JsonConvert.DeserializeObject(strCurrentServicesExport, typeof(DataTable))!;
+            dtExportServices.Merge(dtCurrentServicesExportDataTable);
         }
 
         public static void PrintEvents(this OSTransponderInfo otiLocalOSTransponderInfo)
@@ -228,7 +230,7 @@ namespace KON.OctoScan.NET
                         lCurrentLogger.Info($" TEXT:  {oeCurrentOSEvent.strText}".Pastel(ConsoleColor.Green));
 
                     lCurrentLogger.Info("END".Pastel(ConsoleColor.Green));
-                    lCurrentLogger.Info(Environment.NewLine.Pastel(ConsoleColor.Green));
+                    lCurrentLogger.Info(string.Empty.Pastel(ConsoleColor.Green));
                 }
             }
         }
@@ -238,7 +240,8 @@ namespace KON.OctoScan.NET
             lCurrentLogger.Trace("OSTransponderInfo.ExportEventsToJson()".Pastel(ConsoleColor.Cyan));
 
             var strCurrentEventsExport = JsonConvert.SerializeObject(otiLocalOSTransponderInfo, Formatting.Indented, new JsonSerializerSettings { ContractResolver = new IgnorePropertiesResolver(["iType", "bUseNetworkInformationTable", "bScanEventInformationTable", "iSource", "iNetworkID", "iOriginalNetworkID", "iTransportStreamID", "iPosition", "iEAST", "iModulationSystem", "iFrequency", "iFrequencyFraction", "iPolarity", "iSymbolRate", "iRollOff", "iModulationType", "iBandwidth", "iFEC", "iInputStreamID", "iaEventInformationTableServiceID", "strServiceName", "strProviderName", "bGotFromProgramMapTable", "bGotFromServiceDescriptorTable", "iConditionalAccessMode", "iEventInformationTablePresentFollowing", "iEventInformationTableSchedule", "iServiceID", "iTransportStreamID", "iOriginalNetworkID", "iProgramMapTable", "iProgramClockReferencePacketIdentifier", "iVideoPacketIdentifier", "iaAudioPacketIdentifier", "iSubtitlePacketIdentifier", "iTeletextPacketIdentifier", "byAudioChannels"]) });
-            lCurrentLogger.Info(strCurrentEventsExport.Pastel(ConsoleColor.Green));
+            DataTable dtCurrentEventsExportDataTable = (DataTable)JsonConvert.DeserializeObject(strCurrentEventsExport, typeof(DataTable))!;
+            dtExportEvents.Merge(dtCurrentEventsExportDataTable);
         }
     }
 }

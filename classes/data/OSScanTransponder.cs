@@ -289,6 +289,7 @@ namespace KON.OctoScan.NET
                 return false;
 
             SendData(ostLocalOSScanTransponder.osicOSSatIPConnection.nsSocketTCP, Encoding.ASCII.GetBytes(strCurrentMessage), Encoding.ASCII.GetByteCount(strCurrentMessage));
+            Thread.Sleep(WAITTIME_FOR_RTSPCOMMAND);
 
             return true;
         }

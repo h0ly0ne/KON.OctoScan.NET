@@ -1,8 +1,6 @@
-﻿using System.Collections;
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 
-using DreamersCode.Utilities.Lookups.Languages;
 using Pastel;
 
 using static KON.OctoScan.NET.Constants;
@@ -127,7 +125,7 @@ namespace KON.OctoScan.NET
                                     case 0x83: // TRUEHD
                                     {
                                         if (osCurrentOSService.byAudioChannels < MAX_ANUM)
-                                            osCurrentOSService.iaAudioPacketIdentifier[osCurrentOSService.byAudioChannels++] = iExtractedPID;
+                                            osCurrentOSService.iaAudioPacketIdentifiers[osCurrentOSService.byAudioChannels++] = iExtractedPID;
 
                                         break;
                                     }
@@ -141,7 +139,7 @@ namespace KON.OctoScan.NET
                                                  HasDescription(0x7a, byaCurrentBuffer[(i + 5)..], iExtractedLength))
                                         {
                                             if (osCurrentOSService.byAudioChannels < MAX_ANUM)
-                                                osCurrentOSService.iaAudioPacketIdentifier[osCurrentOSService.byAudioChannels++] = iExtractedPID;
+                                                osCurrentOSService.iaAudioPacketIdentifiers[osCurrentOSService.byAudioChannels++] = iExtractedPID;
                                         }
 
                                         break;
@@ -248,21 +246,23 @@ namespace KON.OctoScan.NET
 
             if (byaCurrentBuffer != null)
             {
-                int iTableDataLengthLimit;
+                int iCurrentDescriptorsLength;
 
-                for (var iCurrentItterator = 11; iCurrentItterator < opiiCurrentOSPacketIdentifierInfo?.iBufferLength - 4; iCurrentItterator += iTableDataLengthLimit + 5)
+                for (var iCurrentServicePosition = 11; iCurrentServicePosition < opiiCurrentOSPacketIdentifierInfo?.iBufferLength - 4; iCurrentServicePosition += iCurrentDescriptorsLength)
                 {
-                    var iCurrentServiceID = ToUShortAsInteger(byaCurrentBuffer?[iCurrentItterator..]);
+                    var iCurrentServiceID = ToUShortAsInteger(byaCurrentBuffer?[iCurrentServicePosition..(iCurrentServicePosition + 2)]);
+                    iCurrentDescriptorsLength = ToByteAsInteger(byaCurrentBuffer?[(iCurrentServicePosition + 3)..(iCurrentServicePosition + 5)]) + 5;
                     var osCurrentOSService = opiiCurrentOSPacketIdentifierInfo?.otsiOSTransportStreamInfo?.ostOSScanTransponder?.otiOSTransponderInfo.GetService(iCurrentServiceID);
-                    iTableDataLengthLimit = ToByteAsInteger(byaCurrentBuffer?[(iCurrentItterator + 3)..]);
 
                     if (osCurrentOSService != null)
                     {
                         osCurrentOSService.iOriginalNetworkID = iCurrentOriginalNetworkID;
                         osCurrentOSService.iTransportStreamID = iCurrentTransportStreamID;
-                        osCurrentOSService.iEventInformationTableSchedule = (byaCurrentBuffer![iCurrentItterator + 2] & 0x02) >> 1;
-                        osCurrentOSService.iEventInformationTablePresentFollowing = byaCurrentBuffer[iCurrentItterator + 2] & 0x01;
-                        osCurrentOSService.iConditionalAccessMode = (byaCurrentBuffer[iCurrentItterator + 3] & 0x10) >> 4;
+                        osCurrentOSService.iEventInformationTableSchedule = (byaCurrentBuffer![iCurrentServicePosition + 2] & 0x02) >> 1;
+                        osCurrentOSService.iEventInformationTablePresentFollowing = byaCurrentBuffer[iCurrentServicePosition + 2] & 0x01;
+                        osCurrentOSService.iConditionalAccessMode = (byaCurrentBuffer[iCurrentServicePosition + 3] & 0x10) >> 4;
+
+                        iServices += 1;
 
                         if (opiiCurrentOSPacketIdentifierInfo is { otsiOSTransportStreamInfo.ostOSScanTransponder.otiOSTransponderInfo: not null })
                         {
@@ -280,32 +280,292 @@ namespace KON.OctoScan.NET
                             }
                         }
 
-                        int iTableDataLength;
+                        byte byCurrentDescriptorLength;
 
-                        for (var iCurrentSubItterator = 0; iCurrentSubItterator < iTableDataLengthLimit; iCurrentSubItterator += iTableDataLength + 2)
+                        for (var iCurrentDescriptorPosition = iCurrentServicePosition + 5; iCurrentDescriptorPosition < iCurrentServicePosition + iCurrentDescriptorsLength; iCurrentDescriptorPosition += byCurrentDescriptorLength)
                         {
-                            var iCurrentItteratorOffset = iCurrentItterator + iCurrentSubItterator + 5;
-                            var iCurrentDescriptorsTag = byaCurrentBuffer[iCurrentItteratorOffset];
-                            iTableDataLength = byaCurrentBuffer[iCurrentItteratorOffset + 1];
+                            var byCurrentDescriptorTag = byaCurrentBuffer[iCurrentDescriptorPosition];
+                            byCurrentDescriptorLength = (byte)(byaCurrentBuffer[iCurrentDescriptorPosition + 1] + 2);
 
-                            if (iCurrentDescriptorsTag == DESCRIPTOR_TAG_SERVICE_DESCRIPTOR)
+                            if (byCurrentDescriptorTag == DESCRIPTORTAG_SERVICE_DESCRIPTOR)
                             {
-                                var iCurrentStringProviderNameLength = byaCurrentBuffer[iCurrentItteratorOffset + 3];
-                                var iCurrentStringNameLength = byaCurrentBuffer[iCurrentItteratorOffset + 4 + iCurrentStringProviderNameLength];
+                                var byCurrentProviderNameLength = byaCurrentBuffer[iCurrentDescriptorPosition + 3];
+                                var byCurrentProviderNameEncoding = byaCurrentBuffer[iCurrentDescriptorPosition + 4];
+                                byte[] byCurrentProviderNameString;
+                                int iCurrentProviderNameEndPosition;
 
-                                osCurrentOSService.strProviderName = new string(Convert.ToChar(0x00), 80);
-                                osCurrentOSService.strServiceName = new string(Convert.ToChar(0x00), 80);
+                                if (byCurrentProviderNameEncoding >= CCT_ENCODING_ISO_6937)
+                                {
+                                    byCurrentProviderNameString = byaCurrentBuffer[(iCurrentDescriptorPosition + 4)..(iCurrentDescriptorPosition + 4 + byCurrentProviderNameLength)];
+                                    iCurrentProviderNameEndPosition = (iCurrentDescriptorPosition + 4 + byCurrentProviderNameLength);
+                                    osCurrentOSService.strProviderName = Encoding.UTF8.GetString(Encoding.Convert(Encoding.GetEncoding(20269), Encoding.UTF8, byCurrentProviderNameString));
+                                }
+                                else
+                                {
+                                    Encoding eCurrentProviderNameEncoding;
 
-                                osCurrentOSService.strProviderName = osCurrentOSService.strProviderName.ConvertEN300468StringToUTF8(byaCurrentBuffer[(iCurrentItteratorOffset + 4)..], iCurrentStringProviderNameLength);
-                                if (osCurrentOSService.strProviderName[79] != 0)
-                                    lCurrentLogger.Warn($"********************************************* PROVIDERNAME OVERFLOW {osCurrentOSService.strProviderName} LENGTH = {iCurrentStringProviderNameLength}".Pastel(ConsoleColor.Yellow));
+                                    switch (byCurrentProviderNameEncoding)
+                                    {
+                                        case CCT_ENCODING_ISO_8859_5:
+                                        {
+                                            eCurrentProviderNameEncoding = Encoding.GetEncoding("iso-8859-5");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_6:
+                                        {
+                                            eCurrentProviderNameEncoding = Encoding.GetEncoding("iso-8859-6");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_7:
+                                        {
+                                            eCurrentProviderNameEncoding = Encoding.GetEncoding("iso-8859-7");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_8:
+                                        {
+                                            eCurrentProviderNameEncoding = Encoding.GetEncoding("iso-8859-8");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_9:
+                                        {
+                                            eCurrentProviderNameEncoding = Encoding.GetEncoding("iso-8859-9");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_10:
+                                        {
+                                            eCurrentProviderNameEncoding = Encoding.GetEncoding("iso-8859-10");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_11:
+                                        {
+                                            eCurrentProviderNameEncoding = Encoding.GetEncoding("iso-8859-11");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_13:
+                                        {
+                                            eCurrentProviderNameEncoding = Encoding.GetEncoding("iso-8859-13");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_15:
+                                        {
+                                            eCurrentProviderNameEncoding = Encoding.GetEncoding("iso-8859-15");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_DYNAMIC_PARTS:
+                                        {
+                                            var byCurrentProviderNameEncodingTable = byaCurrentBuffer[(iCurrentDescriptorPosition + 5)..(iCurrentDescriptorPosition + 7)];
 
-                                osCurrentOSService.strServiceName = osCurrentOSService.strServiceName.ConvertEN300468StringToUTF8(byaCurrentBuffer[(iCurrentItteratorOffset + 5 + iCurrentStringProviderNameLength)..], iCurrentStringNameLength);
-                                if (osCurrentOSService.strServiceName[79] != 0)
-                                    lCurrentLogger.Warn($"********************************************* SERVICENAME OVERFLOW {osCurrentOSService.strServiceName} LENGTH = {iCurrentStringNameLength}".Pastel(ConsoleColor.Yellow));
+                                            eCurrentProviderNameEncoding = byCurrentProviderNameEncodingTable[1] switch
+                                            {
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_1 => Encoding.GetEncoding("iso-8859-1"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_2 => Encoding.GetEncoding("iso-8859-2"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_3 => Encoding.GetEncoding("iso-8859-3"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_4 => Encoding.GetEncoding("iso-8859-4"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_5 => Encoding.GetEncoding("iso-8859-5"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_6 => Encoding.GetEncoding("iso-8859-6"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_7 => Encoding.GetEncoding("iso-8859-7"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_8 => Encoding.GetEncoding("iso-8859-8"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_9 => Encoding.GetEncoding("iso-8859-9"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_10 => Encoding.GetEncoding("iso-8859-10"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_11 => Encoding.GetEncoding("iso-8859-11"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_13 => Encoding.GetEncoding("iso-8859-13"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_14 => Encoding.Unicode,
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_15 => Encoding.GetEncoding("iso-8859-15"),
+                                                _ => Encoding.UTF8
+                                            };
+
+                                            break;
+                                        }
+                                        case CCT_ENCODING_KSX_1001:
+                                        {
+                                            eCurrentProviderNameEncoding = Encoding.GetEncoding("x-cp20949");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_GB_2312:
+                                        {
+                                            eCurrentProviderNameEncoding = Encoding.GetEncoding("gb2312");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_14:
+                                        case CCT_ENCODING_ISO_10646:
+                                        case CCT_ENCODING_ISO_10646_BIG5:
+                                        case CCT_ENCODING_ISO_10646_UTF8:
+                                        {
+                                            eCurrentProviderNameEncoding = Encoding.Unicode;
+                                            break;
+                                        }
+                                        default:
+                                        {
+                                            eCurrentProviderNameEncoding = Encoding.UTF8;
+                                            break;
+                                        }
+                                    }
+
+                                    switch (byCurrentProviderNameEncoding)
+                                    {
+                                        case CCT_ENCODING_ISO_8859_DYNAMIC_PARTS:
+                                        {
+                                            byCurrentProviderNameString = byaCurrentBuffer[(iCurrentDescriptorPosition + 7)..(iCurrentDescriptorPosition + 7 + byCurrentProviderNameLength - 1)];
+                                            iCurrentProviderNameEndPosition = (iCurrentDescriptorPosition + 7 + byCurrentProviderNameLength - 3);
+                                            break;
+                                        }
+                                        case CCT_ENCODING_CUSTOM:
+                                        {
+                                            byCurrentProviderNameString = byaCurrentBuffer[(iCurrentDescriptorPosition + 6)..(iCurrentDescriptorPosition + 6 + byCurrentProviderNameLength - 1)];
+                                            iCurrentProviderNameEndPosition = (iCurrentDescriptorPosition + 6 + byCurrentProviderNameLength - 2);
+                                            break;
+                                        }
+                                        default:
+                                        {
+                                            byCurrentProviderNameString = byaCurrentBuffer[(iCurrentDescriptorPosition + 5)..(iCurrentDescriptorPosition + 5 + byCurrentProviderNameLength - 1)];
+                                            iCurrentProviderNameEndPosition = (iCurrentDescriptorPosition + 5 + byCurrentProviderNameLength - 1);
+                                            break;
+                                        }
+                                    }
+
+                                    osCurrentOSService.strProviderName = Encoding.UTF8.GetString(Encoding.Convert(eCurrentProviderNameEncoding, Encoding.UTF8, byCurrentProviderNameString));
+                                }
+
+                                var byCurrentNameLength = byaCurrentBuffer[iCurrentProviderNameEndPosition];
+                                var byCurrentNameEncoding = byaCurrentBuffer[iCurrentProviderNameEndPosition + 1];
+                                byte[] byCurrentNameString;
+
+                                if (byCurrentNameEncoding >= CCT_ENCODING_ISO_6937)
+                                {
+                                    byCurrentNameString = byaCurrentBuffer[(iCurrentProviderNameEndPosition + 1)..(iCurrentProviderNameEndPosition + 1 + byCurrentNameLength)];
+                                    osCurrentOSService.strName = Encoding.UTF8.GetString(Encoding.Convert(Encoding.GetEncoding(20269), Encoding.UTF8, byCurrentNameString));
+                                }
+                                else
+                                {
+                                    Encoding eCurrentNameEncoding;
+
+                                    switch (byCurrentNameEncoding)
+                                    {
+                                        case CCT_ENCODING_ISO_8859_5:
+                                        {
+                                            eCurrentNameEncoding = Encoding.GetEncoding("iso-8859-5");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_6:
+                                        {
+                                            eCurrentNameEncoding = Encoding.GetEncoding("iso-8859-6");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_7:
+                                        {
+                                            eCurrentNameEncoding = Encoding.GetEncoding("iso-8859-7");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_8:
+                                        {
+                                            eCurrentNameEncoding = Encoding.GetEncoding("iso-8859-8");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_9:
+                                        {
+                                            eCurrentNameEncoding = Encoding.GetEncoding("iso-8859-9");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_10:
+                                        {
+                                            eCurrentNameEncoding = Encoding.GetEncoding("iso-8859-10");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_11:
+                                        {
+                                            eCurrentNameEncoding = Encoding.GetEncoding("iso-8859-11");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_13:
+                                        {
+                                            eCurrentNameEncoding = Encoding.GetEncoding("iso-8859-13");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_15:
+                                        {
+                                            eCurrentNameEncoding = Encoding.GetEncoding("iso-8859-15");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_DYNAMIC_PARTS:
+                                        {
+                                            var byCurrentNameEncodingTable = byaCurrentBuffer[(iCurrentProviderNameEndPosition + 2)..(iCurrentProviderNameEndPosition + 4)];
+
+                                            eCurrentNameEncoding = byCurrentNameEncodingTable[1] switch
+                                            {
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_1 => Encoding.GetEncoding("iso-8859-1"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_2 => Encoding.GetEncoding("iso-8859-2"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_3 => Encoding.GetEncoding("iso-8859-3"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_4 => Encoding.GetEncoding("iso-8859-4"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_5 => Encoding.GetEncoding("iso-8859-5"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_6 => Encoding.GetEncoding("iso-8859-6"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_7 => Encoding.GetEncoding("iso-8859-7"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_8 => Encoding.GetEncoding("iso-8859-8"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_9 => Encoding.GetEncoding("iso-8859-9"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_10 => Encoding.GetEncoding("iso-8859-10"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_11 => Encoding.GetEncoding("iso-8859-11"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_13 => Encoding.GetEncoding("iso-8859-13"),
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_14 => Encoding.Unicode,
+                                                CCT_ENCODING_ISO_8859_DYNAMIC_PARTS_8859_15 => Encoding.GetEncoding("iso-8859-15"),
+                                                _ => Encoding.UTF8
+                                            };
+
+                                            break;
+                                        }
+                                        case CCT_ENCODING_KSX_1001:
+                                        {
+                                            eCurrentNameEncoding = Encoding.GetEncoding("x-cp20949");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_GB_2312:
+                                        {
+                                            eCurrentNameEncoding = Encoding.GetEncoding("gb2312");
+                                            break;
+                                        }
+                                        case CCT_ENCODING_ISO_8859_14:
+                                        case CCT_ENCODING_ISO_10646:
+                                        case CCT_ENCODING_ISO_10646_BIG5:
+                                        case CCT_ENCODING_ISO_10646_UTF8:
+                                        {
+                                            eCurrentNameEncoding = Encoding.Unicode;
+                                            break;
+                                        }
+                                        default:
+                                        {
+                                            eCurrentNameEncoding = Encoding.UTF8;
+                                            break;
+                                        }
+                                    }
+
+                                    switch (byCurrentNameEncoding)
+                                    {
+                                        case CCT_ENCODING_ISO_8859_DYNAMIC_PARTS:
+                                        {
+                                            byCurrentNameString = byaCurrentBuffer[(iCurrentProviderNameEndPosition + 4)..(iCurrentProviderNameEndPosition + 4 + byCurrentNameLength - 3)];
+                                            break;
+                                        }
+                                        case CCT_ENCODING_CUSTOM:
+                                        {
+                                            byCurrentNameString = byaCurrentBuffer[(iCurrentProviderNameEndPosition + 3)..(iCurrentProviderNameEndPosition + 3 + byCurrentNameLength - 2)];
+                                            break;
+                                        }
+                                        default:
+                                        {
+                                            byCurrentNameString = byaCurrentBuffer[(iCurrentProviderNameEndPosition + 2)..(iCurrentProviderNameEndPosition + 2 + byCurrentNameLength - 1)];
+                                            break;
+                                        }
+                                    }
+
+                                    osCurrentOSService.strName = Encoding.UTF8.GetString(Encoding.Convert(eCurrentNameEncoding, Encoding.UTF8, byCurrentNameString));
+                                }
+
+                                if (osCurrentOSService.strProviderName.Length > 80)
+                                    lCurrentLogger.Warn($"PROVIDERNAME OVERFLOW {osCurrentOSService.strProviderName} LENGTH = {osCurrentOSService.strProviderName.Length}".Pastel(ConsoleColor.Yellow));
+
+                                if (osCurrentOSService.strName.Length > 80)
+                                    lCurrentLogger.Warn($"SERVICENAME OVERFLOW {osCurrentOSService.strName} LENGTH = {osCurrentOSService.strName.Length}".Pastel(ConsoleColor.Yellow));
 
                                 osCurrentOSService.strProviderName = osCurrentOSService.strProviderName.CleanupString();
-                                osCurrentOSService.strServiceName = osCurrentOSService.strServiceName.CleanupString();
+                                osCurrentOSService.strName = osCurrentOSService.strName.CleanupString();
 
                                 osCurrentOSService.bGotFromServiceDescriptorTable = true;
                             }
@@ -391,18 +651,14 @@ namespace KON.OctoScan.NET
                             {
                                 if (iCurrentTableDataLength >= 5)
                                 {
-                                    var byaLanguage = new byte[3];
-                                    byaLanguage[0] = byaCurrentBuffer[iCurrentItteratorOffset + 2];
-                                    byaLanguage[1] = byaCurrentBuffer[iCurrentItteratorOffset + 3];
-                                    byaLanguage[2] = byaCurrentBuffer[iCurrentItteratorOffset + 4];
-                                    oeCurrentOSEvent.strLanguage = Encoding.ASCII.GetString(byaLanguage).ToLower();
+                                    oeCurrentOSEvent.strLanguage = Encoding.ASCII.GetString(byaCurrentBuffer[(iCurrentItteratorOffset + 2)..(iCurrentItteratorOffset + 5)]).ToLower();
 
                                     var eCurrentEncoding = Encoding.UTF8;
-                                    var lCurrentLanguage = LanguageCollection.AllLanguages.First(lCurrentLanguage => lCurrentLanguage.ThreeLetterCode.ToLower().Equals(oeCurrentOSEvent.strLanguage.ToLower(), StringComparison.InvariantCultureIgnoreCase));
+                                    var lCurrentLanguage = ISO639LanguageCollection.AllISO639Languages.First(lCurrentLanguage => lCurrentLanguage.ISO6393Code.ToLower().Equals(oeCurrentOSEvent.strLanguage.ToLower(), StringComparison.InvariantCultureIgnoreCase));
 
-                                    if (lCurrentLanguage.TwoLetterCode != null)
+                                    if (lCurrentLanguage.ISO6392Code != null)
                                     {
-                                        var ciCurrentCultureInfo = CultureInfo.GetCultures(CultureTypes.AllCultures).First(ciCurrentCultureInfo => ciCurrentCultureInfo.TwoLetterISOLanguageName.ToLower().Equals(lCurrentLanguage.TwoLetterCode.ToLower(), StringComparison.InvariantCultureIgnoreCase));
+                                        var ciCurrentCultureInfo = CultureInfo.GetCultures(CultureTypes.AllCultures).First(ciCurrentCultureInfo => ciCurrentCultureInfo.TwoLetterISOLanguageName.ToLower().Equals(lCurrentLanguage.ISO6392Code.ToLower(), StringComparison.InvariantCultureIgnoreCase));
                                         oeCurrentOSEvent.strLanguage = ciCurrentCultureInfo.ThreeLetterISOLanguageName.ToLower();
                                         eCurrentEncoding = Encoding.GetEncoding(ciCurrentCultureInfo.TextInfo.ANSICodePage);
                                     }

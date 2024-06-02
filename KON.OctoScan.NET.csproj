@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Remove="C:\Users\oliver.KON\.nuget\packages\languagetags\2.0.0\contentFiles\any\netstandard2.0\RegistryData\language-subtag-registry.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
     <COMReference Include="NetFwTypeLib">
       <WrapperTool>tlbimp</WrapperTool>
       <VersionMinor>0</VersionMinor>
@@ -22,7 +26,7 @@
 
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
-    <PackageReference Include="DreamersCode.Utilities.Lookups.Languages" Version="1.0.1" />
+    <PackageReference Include="NanoXLSX" Version="2.4.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="NLog" Version="5.3.2" />
     <PackageReference Include="Pastel" Version="5.1.0" />

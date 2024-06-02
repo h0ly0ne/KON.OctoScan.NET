@@ -63,11 +63,17 @@ namespace KON.OctoScan.NET
             [Option('g', longName: "exportservices", Required = false, HelpText = "Export result from services scan.")]
             public bool cloExportServices { get; set; }
 
+            [Option('i', longName: "exportservicesexcel", Required = false, HelpText = "Export result from services scan to excel file.")]
+            public bool cloExportServicesExcel { get; set; }
+
             [Option('d', longName: "printevents", Required = false, HelpText = "Output result from events scan.")]
             public bool cloPrintEvents { get; set; }
 
             [Option('h', longName: "exportevents", Required = false, HelpText = "Export result from events scan.")]
             public bool cloExportEvents { get; set; }
+
+            [Option('j', longName: "exporteventsexcel", Required = false, HelpText = "Export result from events scan to excel file.")]
+            public bool cloExportEventsExcel { get; set; }
         }
 
         private static void Main(string[] saLocalArguments)
@@ -240,10 +246,17 @@ namespace KON.OctoScan.NET
                     osiCurrentOSScanIP.Scan();
 
                     bDone = true;
+
+                    if (oLocalOptions is { cloDoEitScan: true, cloExportEventsExcel: true })
+                        osiCurrentOSScanIP.ExportEventsToExcel();
+
+                    if (oLocalOptions.cloExportServicesExcel)
+                        osiCurrentOSScanIP.ExportServicesToExcel();
                 }
 
-                lCurrentLogger.Info("EIT  Total size: {0}           Short size: {1}", iEITSize, iEITShortSize);
-                lCurrentLogger.Info("     Services: {0}             Sections: {1}               Events: {2}                 ({3} deleted)", iEITServices, iEITSections, iEITEvents - iEITEventsDeleted, iEITEventsDeleted);
+                lCurrentLogger.Info($"SCAN    Services: {iServices}".Pastel(ConsoleColor.Cyan));
+                lCurrentLogger.Info($"EIT   Total size: {iEITSize}           Short size: {iEITShortSize}".Pastel(ConsoleColor.Cyan));
+                lCurrentLogger.Info($"EIT     Services: {iEITServices}             Sections: {iEITSections}               Events: {iEITEvents - iEITEventsDeleted}                 ({iEITEventsDeleted} deleted)".Pastel(ConsoleColor.Cyan));
 
                 #if DEBUG
                     Console.ReadKey();

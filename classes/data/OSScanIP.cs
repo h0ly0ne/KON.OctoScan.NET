@@ -1,5 +1,7 @@
-﻿using Pastel;
+﻿using NanoXLSX;
+using Pastel;
 
+using static KON.OctoScan.NET.Constants;
 using static KON.OctoScan.NET.Global;
 
 namespace KON.OctoScan.NET
@@ -132,6 +134,109 @@ namespace KON.OctoScan.NET
             }
 
             return true;
+        }
+        
+        public static void ExportEventsToExcel(this OSScanIP osiLocalOSScanIP)
+        {
+
+        }
+
+        public static void ExportServicesToExcel(this OSScanIP osiLocalOSScanIP)
+        {
+            var strCurrentFilename = DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_ExportServices.xlsx";
+            var wbCurrentWorkbook = new Workbook(strCurrentFilename, "ExportServices");
+            var wsCurrentWorksheet = wbCurrentWorkbook.GetWorksheet("ExportServices");
+
+            wbCurrentWorkbook.SetCurrentWorksheet(wsCurrentWorksheet);
+            wsCurrentWorksheet.SetCurrentRowNumber(0);
+
+            if (osiLocalOSScanIP.olotiOSListOSTransponderInfoDone is { Count: > 0 })
+            {
+                foreach (var fiCurrentOSTransponderInfoHeaderFieldInfo in osiLocalOSScanIP.olotiOSListOSTransponderInfoDone.First()?.GetType().GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name == "iFrequency")!)
+                {
+                    wsCurrentWorksheet.AddNextCell(fiCurrentOSTransponderInfoHeaderFieldInfo.Name);
+                }
+
+                foreach (var fiCurrentOSServiceHeaderFieldInfo in osiLocalOSScanIP.olotiOSListOSTransponderInfoDone.First()?.olosOSListOSService.First().GetType().GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name != "oloeOSListOSEvent" && fiCurrentFieldInfo.Name != "byAudioChannels" && fiCurrentFieldInfo.Name != "bGotFromProgramMapTable" && fiCurrentFieldInfo.Name != "bGotFromServiceDescriptorTable" && fiCurrentFieldInfo.Name != "iEventInformationTablePresentFollowing" && fiCurrentFieldInfo.Name != "iEventInformationTableSchedule")!)
+                {
+                    wsCurrentWorksheet.AddNextCell(fiCurrentOSServiceHeaderFieldInfo.Name);
+                }
+
+                var fCorrectionFactorForColumnFilter = 3 * EXCEL_CHARACTER_TO_WIDTH_CONSTANT;
+                float fProviderNamePropertyMaximumLength = 0;
+                float fNamePropertyMaximumLength = 0;
+
+                foreach (var otiCurrentOSTransponderInfo in osiLocalOSScanIP.olotiOSListOSTransponderInfoDone)
+                {
+                    foreach (var osCurrentOSServiceItem in otiCurrentOSTransponderInfo?.olosOSListOSService!)
+                    {
+                        wsCurrentWorksheet.GoToNextRow();
+
+                        foreach (var fiCurrentOSTransponderInfoHeaderFieldInfo in otiCurrentOSTransponderInfo.GetType().GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name == "iFrequency"))
+                        {
+                            wsCurrentWorksheet.AddNextCell(fiCurrentOSTransponderInfoHeaderFieldInfo.GetValue(otiCurrentOSTransponderInfo));
+                        }
+
+                        foreach (var fiCurrentOSServiceItemFieldInfo in osCurrentOSServiceItem.GetType().GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name != "oloeOSListOSEvent" && fiCurrentFieldInfo.Name != "byAudioChannels" && fiCurrentFieldInfo.Name != "bGotFromProgramMapTable" && fiCurrentFieldInfo.Name != "bGotFromServiceDescriptorTable" && fiCurrentFieldInfo.Name != "iEventInformationTablePresentFollowing" && fiCurrentFieldInfo.Name != "iEventInformationTableSchedule"))
+                        {
+                            if (fiCurrentOSServiceItemFieldInfo.Name is not "iaAudioPacketIdentifiers")
+                            {
+                                wsCurrentWorksheet.AddNextCell(fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem));
+                            }
+                            else
+                            {
+                                if ((byte)(osCurrentOSServiceItem.GetType().GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0) > 0 && ((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0] != 0)
+                                {
+                                    var strCurrentAPIDs = Convert.ToString(((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0]);
+
+                                    for (var iCurrentAPIDCounter = 1; iCurrentAPIDCounter < (byte)(osCurrentOSServiceItem.GetType().GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0); iCurrentAPIDCounter += 1)
+                                    {
+                                        if (((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDCounter] != 0)
+                                            strCurrentAPIDs += "," + Convert.ToString(((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDCounter]);
+                                    }
+
+                                    wsCurrentWorksheet.AddNextCell(strCurrentAPIDs);
+                                }
+                                else
+                                    wsCurrentWorksheet.AddNextCell(string.Empty);
+                            }
+                        }
+                    }
+
+                    var fProviderNamePropertyMaximumLengthCurrent = otiCurrentOSTransponderInfo.olosOSListOSService.Select(osCurrentOSServiceItem => osCurrentOSServiceItem.strProviderName.Length).Prepend(0).Max() * EXCEL_CHARACTER_TO_WIDTH_CONSTANT + fCorrectionFactorForColumnFilter;
+                    if (fProviderNamePropertyMaximumLengthCurrent > fProviderNamePropertyMaximumLength)
+                        fProviderNamePropertyMaximumLength = fProviderNamePropertyMaximumLengthCurrent;
+                    var fNamePropertyMaximumLengthCurrent = otiCurrentOSTransponderInfo.olosOSListOSService.Select(osCurrentOSServiceItem => osCurrentOSServiceItem.strName.Length).Prepend(0).Max() * EXCEL_CHARACTER_TO_WIDTH_CONSTANT + fCorrectionFactorForColumnFilter;
+                    if (fNamePropertyMaximumLengthCurrent > fNamePropertyMaximumLength)
+                        fNamePropertyMaximumLength = fNamePropertyMaximumLengthCurrent;
+                }
+
+                for (var iCurrentColumnNumber = 0; iCurrentColumnNumber <= wsCurrentWorksheet.GetLastColumnNumber(); iCurrentColumnNumber++)
+                {
+                    var fCurrentMaximumLengthValuesWithHeader = Convert.ToSingle(Convert.ToString(wsCurrentWorksheet.GetCell(iCurrentColumnNumber, 0).Value)!.Length) * EXCEL_CHARACTER_TO_WIDTH_CONSTANT + fCorrectionFactorForColumnFilter;
+
+                    switch (iCurrentColumnNumber)
+                    {
+                        case 1:
+                        {
+                            if (fCurrentMaximumLengthValuesWithHeader < fProviderNamePropertyMaximumLength)
+                                fCurrentMaximumLengthValuesWithHeader = fProviderNamePropertyMaximumLength;
+                            break;
+                        }
+                        case 2:
+                        {
+                            if (fCurrentMaximumLengthValuesWithHeader < fNamePropertyMaximumLength)
+                                fCurrentMaximumLengthValuesWithHeader = fNamePropertyMaximumLength;
+                            break;
+                        }
+                    }
+
+                    wsCurrentWorksheet.SetColumnWidth(iCurrentColumnNumber, fCurrentMaximumLengthValuesWithHeader);
+                }
+            }
+
+            wsCurrentWorksheet.SetAutoFilter(0, wsCurrentWorksheet.GetLastColumnNumber());
+            wbCurrentWorkbook.Save();
         }
     }
 }

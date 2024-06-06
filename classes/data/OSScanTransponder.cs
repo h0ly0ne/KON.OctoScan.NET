@@ -19,11 +19,12 @@ namespace KON.OctoScan.NET
 
         public long lTimeout;
         public long lTimestamp;
+        public bool bTimedOut;
     }
 
     public static class OSScanTransponder_Extension
     {
-        public static bool Scan(this OSScanTransponder? ostLocalOSScanTransponder)
+        public static bool Scan(this OSScanTransponder? ostLocalOSScanTransponder, long lLocalTimeout = 600)
         {
             lCurrentLogger.Trace("OSScanTransponder.Scan()".Pastel(ConsoleColor.Cyan));
 
@@ -39,7 +40,7 @@ namespace KON.OctoScan.NET
             osicCurrentOSSatIPConnection.iNSPort = 0;
 
             ostLocalOSScanTransponder.lTimestamp = CurrentTimestamp();
-            ostLocalOSScanTransponder.lTimeout = 600;
+            ostLocalOSScanTransponder.lTimeout = lLocalTimeout;
 
             ostLocalOSScanTransponder.InitSocketUDP();
             if (osicCurrentOSSatIPConnection.nsSocketUDP is not { IsBound: true })
@@ -85,10 +86,15 @@ namespace KON.OctoScan.NET
 
                 if (iReceivedBytesUDP <= 12) 
                     continue;
-                    
+
                 ostLocalOSScanTransponder.ProcessTransponders(byCurrentReceiveBufferUDP[12..iReceivedBytesUDP], iReceivedBytesUDP - 12);
                 ostLocalOSScanTransponder.lTimestamp = CurrentTimestamp();
             }
+
+            if (!bDone && !ostLocalOSScanTransponder.otsiOSTransportStreamInfo.bDone && ostLocalOSScanTransponder.lTimestamp + ostLocalOSScanTransponder.lTimeout <= CurrentTimestamp())
+                ostLocalOSScanTransponder.bTimedOut = true;
+            else
+                ostLocalOSScanTransponder.bTimedOut = false;
 
             if (ostLocalOSScanTransponder.otiOSTransponderInfo != null)
             {

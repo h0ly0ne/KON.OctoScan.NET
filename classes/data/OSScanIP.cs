@@ -87,10 +87,10 @@ namespace KON.OctoScan.NET
             if (otiLocalSourceOSTransponderInfo.iFrequency != otiLocalDestinationOSTransponderInfo.iFrequency && otiLocalSourceOSTransponderInfo.iFrequency != otiLocalDestinationOSTransponderInfo.iFrequency + 1 && otiLocalSourceOSTransponderInfo.iFrequency != otiLocalDestinationOSTransponderInfo.iFrequency - 1)
                 return false;
 
-            return otiLocalSourceOSTransponderInfo.iPolarity == otiLocalDestinationOSTransponderInfo.iPolarity;
+            return otiLocalSourceOSTransponderInfo.iPolarisation == otiLocalDestinationOSTransponderInfo.iPolarisation;
         }
 
-        public static bool Scan(this OSScanIP? osiLocalOSScanIP)
+        public static bool Scan(this OSScanIP? osiLocalOSScanIP, long lLocalTimeout = 600)
         {
             lCurrentLogger.Trace("OSScanIP.Scan()".Pastel(ConsoleColor.Cyan));
 
@@ -123,14 +123,14 @@ namespace KON.OctoScan.NET
                 
                 ostCurrentOSScanTransponder.otiOSTransponderInfo = otiCurrentOSTransponderInfo;
                 var iStartTime = CurrentTimestamp();
-                ostCurrentOSScanTransponder.Scan();
+                ostCurrentOSScanTransponder.Scan(lLocalTimeout);
                 var iEndTime = CurrentTimestamp();
                 otsiCurrentOSTransportStreamInfo.Dispose();
 
                 osiLocalOSScanIP.olotiOSListOSTransponderInfo?.Remove(otiCurrentOSTransponderInfo);
                 osiLocalOSScanIP.olotiOSListOSTransponderInfoDone?.AddLast(otiCurrentOSTransponderInfo);
 
-                lCurrentLogger.Info($"OPERATION(S) FINISHED (AND TOOK {iEndTime-iStartTime} SECONDS)".Pastel(ConsoleColor.Green));
+                lCurrentLogger.Info($"OPERATION(S) {(ostCurrentOSScanTransponder.bTimedOut?"TIMED OUT":"FINISHED")} (AND TOOK {iEndTime-iStartTime} SECOND(S))".Pastel(ostCurrentOSScanTransponder.bTimedOut?ConsoleColor.Yellow:ConsoleColor.Green));
             }
 
             return true;
@@ -152,12 +152,12 @@ namespace KON.OctoScan.NET
 
             if (osiLocalOSScanIP.olotiOSListOSTransponderInfoDone is { Count: > 0 })
             {
-                foreach (var fiCurrentOSTransponderInfoHeaderFieldInfo in osiLocalOSScanIP.olotiOSListOSTransponderInfoDone.First()?.GetType().GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name == "iFrequency")!)
+                foreach (var fiCurrentOSTransponderInfoHeaderFieldInfo in typeof(OSTransponderInfo).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name == "iFrequency"))
                 {
                     wsCurrentWorksheet.AddNextCell(fiCurrentOSTransponderInfoHeaderFieldInfo.Name);
                 }
 
-                foreach (var fiCurrentOSServiceHeaderFieldInfo in osiLocalOSScanIP.olotiOSListOSTransponderInfoDone.First()?.olosOSListOSService.First().GetType().GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name != "oloeOSListOSEvent" && fiCurrentFieldInfo.Name != "byAudioChannels" && fiCurrentFieldInfo.Name != "bGotFromProgramMapTable" && fiCurrentFieldInfo.Name != "bGotFromServiceDescriptorTable" && fiCurrentFieldInfo.Name != "iEventInformationTablePresentFollowing" && fiCurrentFieldInfo.Name != "iEventInformationTableSchedule")!)
+                foreach (var fiCurrentOSServiceHeaderFieldInfo in typeof(OSService).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name != "oloeOSListOSEvent" && fiCurrentFieldInfo.Name != "byAudioChannels" && fiCurrentFieldInfo.Name != "bGotFromProgramMapTable" && fiCurrentFieldInfo.Name != "bGotFromServiceDescriptorTable" && fiCurrentFieldInfo.Name != "iEventInformationTablePresentFollowing" && fiCurrentFieldInfo.Name != "iEventInformationTableSchedule"))
                 {
                     wsCurrentWorksheet.AddNextCell(fiCurrentOSServiceHeaderFieldInfo.Name);
                 }
@@ -172,12 +172,12 @@ namespace KON.OctoScan.NET
                     {
                         wsCurrentWorksheet.GoToNextRow();
 
-                        foreach (var fiCurrentOSTransponderInfoHeaderFieldInfo in otiCurrentOSTransponderInfo.GetType().GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name == "iFrequency"))
+                        foreach (var fiCurrentOSTransponderInfoHeaderFieldInfo in typeof(OSTransponderInfo).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name == "iFrequency"))
                         {
                             wsCurrentWorksheet.AddNextCell(fiCurrentOSTransponderInfoHeaderFieldInfo.GetValue(otiCurrentOSTransponderInfo));
                         }
 
-                        foreach (var fiCurrentOSServiceItemFieldInfo in osCurrentOSServiceItem.GetType().GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name != "oloeOSListOSEvent" && fiCurrentFieldInfo.Name != "byAudioChannels" && fiCurrentFieldInfo.Name != "bGotFromProgramMapTable" && fiCurrentFieldInfo.Name != "bGotFromServiceDescriptorTable" && fiCurrentFieldInfo.Name != "iEventInformationTablePresentFollowing" && fiCurrentFieldInfo.Name != "iEventInformationTableSchedule"))
+                        foreach (var fiCurrentOSServiceItemFieldInfo in typeof(OSService).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name != "oloeOSListOSEvent" && fiCurrentFieldInfo.Name != "byAudioChannels" && fiCurrentFieldInfo.Name != "bGotFromProgramMapTable" && fiCurrentFieldInfo.Name != "bGotFromServiceDescriptorTable" && fiCurrentFieldInfo.Name != "iEventInformationTablePresentFollowing" && fiCurrentFieldInfo.Name != "iEventInformationTableSchedule"))
                         {
                             if (fiCurrentOSServiceItemFieldInfo.Name is not "iaAudioPacketIdentifiers")
                             {
@@ -185,11 +185,11 @@ namespace KON.OctoScan.NET
                             }
                             else
                             {
-                                if ((byte)(osCurrentOSServiceItem.GetType().GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0) > 0 && ((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0] != 0)
+                                if ((byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0) > 0 && ((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0] != 0)
                                 {
                                     var strCurrentAPIDs = Convert.ToString(((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0]);
 
-                                    for (var iCurrentAPIDCounter = 1; iCurrentAPIDCounter < (byte)(osCurrentOSServiceItem.GetType().GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0); iCurrentAPIDCounter += 1)
+                                    for (var iCurrentAPIDCounter = 1; iCurrentAPIDCounter < (byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0); iCurrentAPIDCounter += 1)
                                     {
                                         if (((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDCounter] != 0)
                                             strCurrentAPIDs += "," + Convert.ToString(((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDCounter]);

@@ -23,9 +23,9 @@
 
         public const int DESCRIPTORTAG_SERVICE_DESCRIPTOR = 0x48;
 
-        public static string?[] Polarity2String = ["v", "h", "r", "l", null];
-        public static string?[] ModulationSystem2String = ["undef", "dvbc", "dvbcb", "dvbt", "dss", "dvbs", "dvbs2", "dvbh", "isdbt", "isdbs", "isdbc", "atsc", "atscmh", "dtmb", "cmmb", "dab", "dvbt2", "turbo", "dvbcc", "dvbc2", null];
+        public static string?[] ModulationSystem2String = ["undef","dvbc", "dvbcb", "dvbt", "dss", "dvbs", "dvbs2", "dvbh", "isdbt", "isdbs", "isdbc", "atsc", "atscmh", "dtmb", "cmmb", "dab", "dvbt2", "turbo", "dvbcc", "dvbc2", null];
         public static string?[] ModulationType2String = ["qpsk", "16qam", "32qam", "64qam", "128qam", "256qam", "autoqam", "8vsb", "16vsb", "8psk", "16apsk", "32apsk", "dqpsk", "4qamnr", null];
+        public static string?[] Polarisation2String = ["v", "h", "r", "l", null];
         public static string?[] Bandwidth2String = ["8", "7", "6", "auto", "5", "10", "1.712", null];
 
         public const int CCT_ENCODING_ISO_8859_5 = 0x01;

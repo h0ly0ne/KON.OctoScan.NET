@@ -202,7 +202,7 @@ namespace KON.OctoScan.NET
                                 otiCurrentOSTransponderInfo.iPosition = GetBCD(byaCurrentBuffer[(iTransponderInfoItterator + 6)..], 4);
                                 otiCurrentOSTransponderInfo.iSymbolRate = GetBCD(byaCurrentBuffer[(iTransponderInfoItterator + 9)..], 7) / 10;
                                 otiCurrentOSTransponderInfo.iEAST = (byaCurrentBuffer[iTransponderInfoItterator + 8] & 0x80) >> 7;
-                                otiCurrentOSTransponderInfo.iPolarity = 1 ^ ((byaCurrentBuffer[iTransponderInfoItterator + 8] & 0x60) >> 5);
+                                otiCurrentOSTransponderInfo.iPolarisation = 1 ^ ((byaCurrentBuffer[iTransponderInfoItterator + 8] & 0x60) >> 5);
                                 otiCurrentOSTransponderInfo.iRollOff = (byaCurrentBuffer[iTransponderInfoItterator + 8] & 0x18) >> 3;
                                 otiCurrentOSTransponderInfo.iType = otiCurrentOSTransponderInfo.iModulationSystem = ((byaCurrentBuffer[iTransponderInfoItterator + 8] & 0x04) >> 2) != 0 ? 6 : 5;
                                 otiCurrentOSTransponderInfo.iModulationType = byaCurrentBuffer[iTransponderInfoItterator + 8] & 0x03;

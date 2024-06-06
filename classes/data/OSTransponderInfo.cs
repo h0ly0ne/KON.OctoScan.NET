@@ -25,7 +25,7 @@ namespace KON.OctoScan.NET
         public int iModulationSystem;
         public int iFrequency;
         public int iFrequencyFraction;
-        public int iPolarity;
+        public int iPolarisation;
         public int iSymbolRate;
         public int iRollOff;
         public int iModulationType;
@@ -63,7 +63,7 @@ namespace KON.OctoScan.NET
                 case 5:
                 case 6:
                 {
-                    sbCurrentStringBuilder.AppendFormat("src={0}&freq={1}&pol={2}&msys={3}&sr={4}", iSource, iFrequency, Polarity2String[iPolarity & 3], ModulationSystem2String[iModulationSystem], iSymbolRate);
+                    sbCurrentStringBuilder.AppendFormat("src={0}&freq={1}&pol={2}&msys={3}&sr={4}", iSource, iFrequency, Polarisation2String[iPolarisation & 3], ModulationSystem2String[iModulationSystem], iSymbolRate);
 
                     break;
                 }

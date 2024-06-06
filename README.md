@@ -4,35 +4,43 @@
 Copyright (C) 2016 Digital Devices GmbH
 Copyright (C) 2024 Oswald Oliver
 
-ERROR(S):
-  Required option 'f, freq' is missing.
-  Required option 'm, msys' is missing.
-  A required value not bound to option name is missing.
-
-  -n, --use_nit           Use network information table. If not specified only a single transponder
-                          is scanned.
-  -f, --freq              Required. Frequency in MHz.
-  -s, --sr                Symbolrate in kSymbols (required for DVB-S/S2 and DVB-C). DVB-S/S2
-                          example: --sr=27500. DVB-C example: --sr=6900.
-  -S, --src               Satellite source 1,2,3,4 (required for DVB-S/S2).
-  -p, --pol               Polarisation = v,h,r,l (required for DVB-S/S2). Example: --pol=v.
-  -b, --bw                Bandwidth 1.712,5,6,7,8,10 (required for DVB-T/T2).
-  -P, --isi               ImageStreamIdentifier for physical layer pipe. Example: --isi=1
-  -m, --msys              Required. Modulation System = dvbs, dvbs2, dvbc, dvbt, dvbt2. Example:
-                          --msys=dvbs.
-  -t, --mtype             Modulation Type = 16qam,32qam,64qam,128qam,256qam (required for DVB-C).
-  -e, --eit               Do an EIT scan.
-  -E, --eit_sid           Sid list = comma separated list of sid numbers. Example:
-                          --eit_sid=1000,1002,3003.
-  -x, --parse_mjd         Parse Date from Modified Julian Date.
-  -v, --verbose           Set output to verbose level.
-  -c, --printservices     Output result from services scan.
-  -g, --exportservices    Export result from services scan.
-  -d, --printevents       Output result from events scan.
-  -h, --exportevents      Export result from events scan.
-  --help                  Display this help screen.
-  --version               Display version information.
-  <server ip> (pos. 0)    Required. IP Address of SAT>IP server
+  --mode                     Required. Execution mode / Operation selection: scan/parsedate
+  --mjd                      Parse Date from Modified Julian Date.
+  --frequencies              Frequencies in MHz.
+                             Example: --frequencies=378
+  --modulationsystem         Required. Modulation System.
+                             Example: --modulationsystem=dvbc
+  --modulationtype           Modulation Type (required for DVB-C).
+                             Example: --modulationtype=t256qam
+  --symbolrate               Symbolrate in kSymbols (required for DVB-S/S2 and DVB-C).
+                             Example: --symbolrate=6900
+  --transpondertimeout       Timeout in seconds for transponder scanning.
+                             Example: --transpondertimeout=30
+  --satellitesource          Satellite source 1,2,3,4 (required for DVB-S/S2).
+                             Example: --satellitesource=1
+  --polarisation             Polarisation v,h,r,l (required for DVB-S/S2).
+                             Example: --polarisation=v
+  --bandwidth                Bandwidth 1.712,5,6,7,8,10 (required for DVB-T/T2).
+                             Example: --bandwidth=8
+  --nit                      Use network information table. If specified additional transponders
+                             will be scanned from network information table.
+  --eit                      Use event information table. If specified event information will be
+                             collected from transponders.
+  --eitfiltersid             Comma separated list of services that will be looked up from event
+                             information table.
+                             Example: --eitfiltersid=1000,1002,3003
+  --imagestreamidentifier    ImageStreamIdentifier for physical layer pipe.
+                             Example: --imagestreamidentifier=1
+  --printservices            Output result from services scan.
+  --exportservices           Export result from services scan.
+  --exportservicesexcel      Export result from services scan to excel file.
+  --printevents              Output result from events scan.
+  --exportevents             Export result from events scan.
+  --exporteventsexcel        Export result from events scan to excel file.
+  --verbose                  Set output to verbose level.
+  --help                     Display this help screen.
+  --version                  Display version information.
+  <server ip> (pos. 0)       Required. IP Address of SAT>IP server
 
 * Notes on NIT scanning:
     With some cable providers or inhouse retransmission systems
@@ -44,4 +52,5 @@ ERROR(S):
     which is usable only on the same hardware configuration.
 
 * Example: NIT based scan which should work on Unitymedia in Germany
-    KON.OctoScan.NET --use_nit=true --freq=138 --msys=dvbc --sr=6900 --mtype=256qam 10.0.4.24
+    KON.OctoScan.NET --mode scan --frequencies=138 --modulationsystem=dvbc
+                     --symbolrate=6900 --modulationtype=t256qam --nit 10.0.4.24

@@ -73,30 +73,30 @@ namespace KON.OctoScan.NET
             [Option(longName: "mjd", Required = false, HelpText = "Parse Date from Modified Julian Date.")]
             public long? cloModifiedJulianDate { get; set; }
 
-            [Option(longName: "frequencies", Required = false, HelpText = "Frequencies in MHz. Example: --frequencies=378")]
+            [Option(longName: "frequencies", Required = false, HelpText = "Frequencies in MHz.\r\nExample: --frequencies=378")]
             public string? cloFrequenciesInMHz { get; set; }
 
-            [Option(longName: "modulationsystem", Required = true, HelpText = "Modulation System. Example: --modulationsystem=dvbc")]
+            [Option(longName: "modulationsystem", Required = true, HelpText = "Modulation System.\r\nExample: --modulationsystem=dvbc")]
             public FlagModulationSystem? cloModulationSystem { get; set; }
 
-            [Option(longName: "modulationtype", Required = false, HelpText = "Modulation Type (required for DVB-C). Example: --modulationtype=t256qam")]
+            [Option(longName: "modulationtype", Required = false, HelpText = "Modulation Type (required for DVB-C).\r\nExample: --modulationtype=t256qam")]
             public FlagModulationType? cloModulationType { get; set; }
 
-            [Option(longName: "symbolrate", Required = false, HelpText = "Symbolrate in kSymbols (required for DVB-S/S2 and DVB-C). Example: --symbolrate=6900")]
+            [Option(longName: "symbolrate", Required = false, HelpText = "Symbolrate in kSymbols (required for DVB-S/S2 and DVB-C).\r\nExample: --symbolrate=6900")]
             public int? cloSymbolRateInkSymbols { get; set; }
 
-            [Option(longName: "transpondertimeout", Required = false, HelpText = "Timeout in seconds for transponder scanning. Example: --transpondertimeout=30")]
+            [Option(longName: "transpondertimeout", Required = false, HelpText = "Timeout in seconds for transponder scanning.\r\nExample: --transpondertimeout=30")]
             public int? cloTransponderTimeout { get; set; }
 
             //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
-            [Option(longName: "satellitesource", Required = false, HelpText = "Satellite source 1,2,3,4 (required for DVB-S/S2). Example: --satellitesource=1")]
+            [Option(longName: "satellitesource", Required = false, HelpText = "Satellite source 1,2,3,4 (required for DVB-S/S2).\r\nExample: --satellitesource=1")]
             public int? cloSatelliteSource { get; set; }
 
-            [Option(longName: "polarisation", Required = false, HelpText = "Polarisation v,h,r,l (required for DVB-S/S2). Example: --polarisation=v")]
+            [Option(longName: "polarisation", Required = false, HelpText = "Polarisation v,h,r,l (required for DVB-S/S2).\r\nExample: --polarisation=v")]
             public string? cloPolarisation { get; set; }
 
-            [Option(longName: "bandwidth", Required = false, HelpText = "Bandwidth 1.712,5,6,7,8,10 (required for DVB-T/T2). Example: --bandwidth=8")]
+            [Option(longName: "bandwidth", Required = false, HelpText = "Bandwidth 1.712,5,6,7,8,10 (required for DVB-T/T2).\r\nExample: --bandwidth=8")]
             public string? cloBandwidth { get; set; }
 
             [Option(longName: "nit", Required = false, HelpText = "Use network information table. If specified additional transponders will be scanned from network information table.")]
@@ -105,12 +105,12 @@ namespace KON.OctoScan.NET
             [Option(longName: "eit", Required = false, HelpText = "Use event information table. If specified event information will be collected from transponders.")]
             public bool cloEventInformationTable { get; set; }
 
-            [Option(longName: "eitfiltersid", Required = false, HelpText = "Comma separated list of services that will be looked up from event information table. Example: --eitfiltersid=1000,1002,3003")]
+            [Option(longName: "eitfiltersid", Required = false, HelpText = "Comma separated list of services that will be looked up from event information table.\r\nExample: --eitfiltersid=1000,1002,3003")]
             public string? cloEventInformationTableSIDFilter { get; set; }
 
             //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
-            [Option(longName: "imagestreamidentifier", Required = false, HelpText = "ImageStreamIdentifier for physical layer pipe. Example: --imagestreamidentifier=1")]
+            [Option(longName: "imagestreamidentifier", Required = false, HelpText = "ImageStreamIdentifier for physical layer pipe.\r\nExample: --imagestreamidentifier=1")]
             public int? cloPhysicalLayerPipes { get; set; }
 
             //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
@@ -184,7 +184,8 @@ namespace KON.OctoScan.NET
                 htCurrentHelpText.AddPostOptionsLine("    which is usable only on the same hardware configuration.");
                 htCurrentHelpText.AddPostOptionsLine("");
                 htCurrentHelpText.AddPostOptionsLine("* Example: NIT based scan which should work on Unitymedia in Germany");
-                htCurrentHelpText.AddPostOptionsLine("    KON.OctoScan.NET -M Scan --freq=138 --msys=dvbc --sr=6900 --mtype=256qam --use_nit 10.0.4.24");
+                htCurrentHelpText.AddPostOptionsLine("    KON.OctoScan.NET --mode scan --frequencies=138 --modulationsystem=dvbc");
+                htCurrentHelpText.AddPostOptionsLine("                     --symbolrate=6900 --modulationtype=t256qam --nit 10.0.4.24");
                 htCurrentHelpText.AddPostOptionsLine("");
 
                 return HelpText.DefaultParsingErrorsHandler(result, htCurrentHelpText);

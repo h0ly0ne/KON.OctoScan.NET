@@ -194,6 +194,7 @@ namespace KON.OctoScan.NET
             lCurrentLogger.Info(htCurrentHelpText);
 
             #if DEBUG
+                lCurrentLogger.Info($"Press any key to continue ...".Pastel(ConsoleColor.Green));
                 Console.ReadKey();
             #endif
         }
@@ -217,7 +218,7 @@ namespace KON.OctoScan.NET
                         int iYear = 0, iMonth = 0, iDay = 0;
 
                         GetDateFromModifiedJulianDate(iModifiedJulianDate, ref iYear, ref iMonth, ref iDay);
-                        lCurrentLogger.Info(" Date = {0:00}.{1:00}.{2:00}", iDay, iMonth, iYear);
+                        lCurrentLogger.Info($"Date = {iDay:00}.{iMonth:00}.{iYear:00}".Pastel(ConsoleColor.Cyan));
 
                         break;
                     }
@@ -370,6 +371,7 @@ namespace KON.OctoScan.NET
             }
 
             #if DEBUG
+                lCurrentLogger.Info($"Press any key to continue ...".Pastel(ConsoleColor.Green));
                 Console.ReadKey();
             #endif
         }

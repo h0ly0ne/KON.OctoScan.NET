@@ -130,7 +130,7 @@ namespace KON.OctoScan.NET
                 osiLocalOSScanIP.olotiOSListOSTransponderInfo?.Remove(otiCurrentOSTransponderInfo);
                 osiLocalOSScanIP.olotiOSListOSTransponderInfoDone?.AddLast(otiCurrentOSTransponderInfo);
 
-                lCurrentLogger.Info($"OPERATION(S) {(ostCurrentOSScanTransponder.bTimedOut?"TIMED OUT":"FINISHED")} (AND TOOK {iEndTime-iStartTime} SECOND(S))".Pastel(ostCurrentOSScanTransponder.bTimedOut?ConsoleColor.Yellow:ConsoleColor.Green));
+                lCurrentLogger.Info($"OPERATION(S) {(ostCurrentOSScanTransponder.bTimedOut?"TIMED OUT/NO RESULT":"FINISHED (" + otiCurrentOSTransponderInfo?.olosOSListOSService.Count + " SERVICES FOUND)")} (AND TOOK {iEndTime-iStartTime} SECOND(S) AND {ostCurrentOSScanTransponder.lRetries} RETRY)".Pastel(ostCurrentOSScanTransponder.bTimedOut?ConsoleColor.Yellow:ConsoleColor.Green));
             }
 
             return true;
@@ -138,14 +138,16 @@ namespace KON.OctoScan.NET
         
         public static void ExportEventsToExcel(this OSScanIP osiLocalOSScanIP)
         {
-
+            lCurrentLogger.Trace("OSScanIP.ExportEventsToExcel()".Pastel(ConsoleColor.Cyan));
         }
 
-        public static void ExportServicesToExcel(this OSScanIP osiLocalOSScanIP)
+        public static void ExportServicesToExcel(this OSScanIP osiLocalOSScanIP, string strLocalFilename = "ExportServices")
         {
-            var strCurrentFilename = DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_ExportServices.xlsx";
-            var wbCurrentWorkbook = new Workbook(strCurrentFilename, "ExportServices");
-            var wsCurrentWorksheet = wbCurrentWorkbook.GetWorksheet("ExportServices");
+            lCurrentLogger.Trace("OSScanIP.ExportServicesToExcel()".Pastel(ConsoleColor.Cyan));
+
+            var strCurrentFilename = DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_" + strLocalFilename + ".xlsx";
+            var wbCurrentWorkbook = new Workbook(strCurrentFilename, strLocalFilename);
+            var wsCurrentWorksheet = wbCurrentWorkbook.GetWorksheet(strLocalFilename);
 
             wbCurrentWorkbook.SetCurrentWorksheet(wsCurrentWorksheet);
             wsCurrentWorksheet.SetCurrentRowNumber(0);

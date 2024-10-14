@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text;
 
 using Pastel;
+using Polly;
 
 using static KON.OctoScan.NET.Constants;
 using static KON.OctoScan.NET.Global;
@@ -20,6 +21,7 @@ namespace KON.OctoScan.NET
         public long lTimeout;
         public long lTimestamp;
         public bool bTimedOut;
+        public long lRetries;
     }
 
     public static class OSScanTransponder_Extension
@@ -60,8 +62,13 @@ namespace KON.OctoScan.NET
             if (!ostLocalOSScanTransponder.RTSPCheckOK())
                 return false;
 
-            ostLocalOSScanTransponder.UpdatePIDs();
-            if (!ostLocalOSScanTransponder.RTSPCheckOK())
+            var bUpdatePIDSuccessful = false;
+            var cCurrentContext = new Context { { "Retries", 0 } };
+            Policy.HandleResult<bool>(r => r != true).WaitAndRetry(10, _ => TimeSpan.FromSeconds(1), onRetry: (_, _, retryCount, context) => { context["Retries"] = retryCount; }).Execute(delegate { ostLocalOSScanTransponder.UpdatePIDs(); return bUpdatePIDSuccessful = ostLocalOSScanTransponder.RTSPCheckOK(); }, cCurrentContext);
+            ostLocalOSScanTransponder.lRetries = Convert.ToInt32(cCurrentContext["Retries"]);
+            ostLocalOSScanTransponder.lTimeout += ostLocalOSScanTransponder.lRetries;
+
+            if (!bUpdatePIDSuccessful)
                 return false;
 
             ostLocalOSScanTransponder.AddSFilter(DEFAULT_PID_PAT, DEFAULT_TID_PA, 0, 0, 5);

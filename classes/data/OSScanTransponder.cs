@@ -26,7 +26,7 @@ namespace KON.OctoScan.NET
 
     public static class OSScanTransponder_Extension
     {
-        public static bool Scan(this OSScanTransponder? ostLocalOSScanTransponder, long lLocalTimeout = 600)
+        public static bool Scan(this OSScanTransponder? ostLocalOSScanTransponder, long lLocalTimeout = 600, int iLocalTransponderRetries = 10)
         {
             lCurrentLogger.Trace("OSScanTransponder.Scan()".Pastel(ConsoleColor.Cyan));
 
@@ -64,7 +64,7 @@ namespace KON.OctoScan.NET
 
             var bUpdatePIDSuccessful = false;
             var cCurrentContext = new Context { { "Retries", 0 } };
-            Policy.HandleResult<bool>(r => r != true).WaitAndRetry(10, _ => TimeSpan.FromSeconds(1), onRetry: (_, _, retryCount, context) => { context["Retries"] = retryCount; }).Execute(delegate { ostLocalOSScanTransponder.UpdatePIDs(); return bUpdatePIDSuccessful = ostLocalOSScanTransponder.RTSPCheckOK(); }, cCurrentContext);
+            Policy.HandleResult<bool>(r => r != true).WaitAndRetry(iLocalTransponderRetries, _ => TimeSpan.FromSeconds(1), onRetry: (_, _, retryCount, context) => { context["Retries"] = retryCount; }).Execute(delegate { ostLocalOSScanTransponder.UpdatePIDs(); return bUpdatePIDSuccessful = ostLocalOSScanTransponder.RTSPCheckOK(); }, cCurrentContext);
             ostLocalOSScanTransponder.lRetries = Convert.ToInt32(cCurrentContext["Retries"]);
             ostLocalOSScanTransponder.lTimeout += ostLocalOSScanTransponder.lRetries;
 

@@ -88,6 +88,12 @@ namespace KON.OctoScan.NET
             [Option(longName: "transpondertimeout", Required = false, HelpText = "Timeout in seconds for transponder scanning.\r\nExample: --transpondertimeout=30")]
             public int? cloTransponderTimeout { get; set; }
 
+            [Option(longName: "scanretries", Required = false, HelpText = "Retries for scanning.\r\nExample: --scanretries=3")]
+            public int? cloScanRetries { get; set; }
+
+            [Option(longName: "transponderretries", Required = false, HelpText = "Retries for transponder scanning.\r\nExample: --transponderretries=10")]
+            public int? cloTransponderRetries { get; set; }
+
             //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
             [Option(longName: "satellitesource", Required = false, HelpText = "Satellite source 1,2,3,4 (required for DVB-S/S2).\r\nExample: --satellitesource=1")]
@@ -260,12 +266,8 @@ namespace KON.OctoScan.NET
                                     }
                                 }
 
-                                foreach (var lsFrequency in lsFrequencies)
+                                foreach (var otiCurrentOSTransponderInfo in lsFrequencies.Select(lsFrequency => new OSTransponderInfo { iFrequency = Convert.ToInt32(lsFrequency) }))
                                 {
-                                    var otiCurrentOSTransponderInfo = new OSTransponderInfo();
-
-                                    otiCurrentOSTransponderInfo.iFrequency = Convert.ToInt32(lsFrequency);
-
                                     for (var iModulationSystemCounter = 0; iModulationSystemCounter < ModulationSystem2String.Length; iModulationSystemCounter++)
                                     {
                                         if (ModulationSystem2String[iModulationSystemCounter] != oLocalOptions.cloModulationSystem.ToString())
@@ -343,9 +345,40 @@ namespace KON.OctoScan.NET
                                 }
 
                                 if (oLocalOptions.cloTransponderTimeout != null)
-                                    osiCurrentOSScanIP.Scan(Convert.ToInt32(oLocalOptions.cloTransponderTimeout));
+                                {
+                                    if (oLocalOptions.cloScanRetries != null)
+                                    {
+                                        if(oLocalOptions.cloTransponderRetries != null)
+                                            osiCurrentOSScanIP.Scan(lLocalTimeout: Convert.ToInt32(oLocalOptions.cloTransponderTimeout), iLocalScanRetries: Convert.ToInt32(oLocalOptions.cloScanRetries), iLocalTransponderRetries: Convert.ToInt32(oLocalOptions.cloTransponderRetries));
+                                        else
+                                            osiCurrentOSScanIP.Scan(lLocalTimeout: Convert.ToInt32(oLocalOptions.cloTransponderTimeout), iLocalScanRetries: Convert.ToInt32(oLocalOptions.cloScanRetries));
+                                    }
+                                    else
+                                    {
+                                        if (oLocalOptions.cloTransponderRetries != null)
+                                            osiCurrentOSScanIP.Scan(lLocalTimeout: Convert.ToInt32(oLocalOptions.cloTransponderTimeout), iLocalTransponderRetries: Convert.ToInt32(oLocalOptions.cloTransponderRetries));
+                                        else
+                                            osiCurrentOSScanIP.Scan(lLocalTimeout: Convert.ToInt32(oLocalOptions.cloTransponderTimeout));
+                                    }
+                                        
+                                }
                                 else
-                                    osiCurrentOSScanIP.Scan();
+                                {
+                                    if (oLocalOptions.cloScanRetries != null)
+                                    {
+                                        if (oLocalOptions.cloTransponderRetries != null)
+                                            osiCurrentOSScanIP.Scan(iLocalScanRetries: Convert.ToInt32(oLocalOptions.cloScanRetries), iLocalTransponderRetries: Convert.ToInt32(oLocalOptions.cloTransponderRetries));
+                                        else
+                                            osiCurrentOSScanIP.Scan(iLocalScanRetries: Convert.ToInt32(oLocalOptions.cloScanRetries));
+                                    }
+                                    else
+                                    {
+                                        if (oLocalOptions.cloTransponderRetries != null)
+                                            osiCurrentOSScanIP.Scan(iLocalTransponderRetries: Convert.ToInt32(oLocalOptions.cloTransponderRetries));
+                                        else
+                                            osiCurrentOSScanIP.Scan();
+                                    }
+                                }
 
                                 bDone = true;
 

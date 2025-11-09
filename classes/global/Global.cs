@@ -1,7 +1,6 @@
-﻿using System.Data;
-using System.Net.Sockets;
+﻿using System.Collections;
+using System.Data;
 using System.Reflection;
-using System.Text.RegularExpressions;
 
 using NetFwTypeLib;
 using Newtonsoft.Json;
@@ -32,6 +31,10 @@ namespace KON.OctoScan.NET
         public static DataTable dtExportServices = new();
         public static DataTable dtExportEvents = new();
 
+        /// <summary>
+        /// Global.CurrentTimestamp()
+        /// </summary>
+        /// <returns></returns>
         public static long CurrentTimestamp()
         {
             lCurrentLogger.Trace("Global.CurrentTimestamp()".Pastel(ConsoleColor.Cyan));
@@ -39,6 +42,10 @@ namespace KON.OctoScan.NET
             return DateTimeOffset.Now.ToUnixTimeSeconds();
         }
 
+        /// <summary>
+        /// Global.CreateFirewallRule()
+        /// </summary>
+        /// <returns></returns>
         public static bool CreateFirewallRule()
         {
             lCurrentLogger.Trace("Global.CreateFirewallRule()".Pastel(ConsoleColor.Cyan));
@@ -167,22 +174,50 @@ namespace KON.OctoScan.NET
             return 0;
         }
 
+        /// <summary>
+        /// Global.GetBytesAsInt32()
+        /// </summary>
+        /// <param name="byaLocalBuffer"></param>
+        /// <param name="bLocalReverse"></param>
+        /// <param name="iLocalStartBit"></param>
+        /// <param name="iLocalBitAmount"></param>
+        /// <returns></returns>
+        public static int GetBytesAsInt32(byte[]? byaLocalBuffer, bool bLocalReverse, int? iLocalStartBit, int? iLocalBitAmount)
+        {
+            lCurrentLogger.Trace("Global.GetBytesAsInt32()".Pastel(ConsoleColor.Cyan));
+
+            if (byaLocalBuffer == null)
+                return 0;
+
+            var baCurrentBitArray = bLocalReverse ? new BitArray(byaLocalBuffer.Reverse().ToArray()) : new BitArray(byaLocalBuffer);
+            return baCurrentBitArray.GetBitsAsInt32(iLocalStartBit, iLocalBitAmount);
+        }
+
+        /// <summary>
+        /// Global.GetBytesAsInt64()
+        /// </summary>
+        /// <param name="byaLocalBuffer"></param>
+        /// <param name="bLocalReverse"></param>
+        /// <param name="iLocalStartBit"></param>
+        /// <param name="iLocalBitAmount"></param>
+        /// <returns></returns>
+        public static long GetBytesAsInt64(byte[]? byaLocalBuffer, bool bLocalReverse, int? iLocalStartBit, int? iLocalBitAmount)
+        {
+            lCurrentLogger.Trace("Global.GetBytesAsInt64()".Pastel(ConsoleColor.Cyan));
+
+            if (byaLocalBuffer == null)
+                return 0;
+
+            var baCurrentBitArray = bLocalReverse ? new BitArray(byaLocalBuffer.Reverse().ToArray()) : new BitArray(byaLocalBuffer);
+            return baCurrentBitArray.GetBitsAsInt64(iLocalStartBit, iLocalBitAmount);
+        }
+        
         public static int ToByteAsInteger(byte[]? byaLocalBuffer)
         {
             lCurrentLogger.Trace("Global.ToByteAsInteger()".Pastel(ConsoleColor.Cyan));
 
             if (byaLocalBuffer != null)
                 return ((byaLocalBuffer[0] & 0x0F) << 8) | byaLocalBuffer[1];
-
-            return 0;
-        }
-
-        public static int GetPID(byte[]? byaLocalBuffer)
-        {
-            lCurrentLogger.Trace("Global.GetPID()".Pastel(ConsoleColor.Cyan));
-
-            if (byaLocalBuffer != null) 
-                return ((byaLocalBuffer[0] & 0x1F) << 8) | (byaLocalBuffer[1] & 0xFF);
 
             return 0;
         }
@@ -230,31 +265,6 @@ namespace KON.OctoScan.NET
                 m = 2;
                 d = 29;
             }
-        }
-
-        public static int SendData(Socket? nsLocalSocket, byte[] baLocalBuffer, int iDataLength)
-        {
-            lCurrentLogger.Trace("Global.SendData()".Pastel(ConsoleColor.Cyan));
-
-            var iPacketDone = 0;
-
-            if (nsLocalSocket == null) 
-                return 0;
-
-            for (var iPacketToDo = iDataLength; iPacketToDo > 0; iPacketToDo -= iPacketDone)
-            {
-                try
-                {
-                    iPacketDone = nsLocalSocket.Send(baLocalBuffer, iDataLength - iPacketToDo, iPacketToDo, SocketFlags.None);
-                }
-                catch
-                {
-                    return iPacketDone;
-                }
-            }
-
-            return iDataLength;
-
         }
 
         public static int GetTransportStreamPayload(byte[] byaLocalTransponder)
@@ -307,37 +317,41 @@ namespace KON.OctoScan.NET
             return uiCurrentElementOrValue == 0;
         }
 
-        public static bool HasDescription(byte byLocalSearchTerm, byte[] byaLocalSearchCollection, int iLocalSearchCollectionLength)
-        {
-            lCurrentLogger.Trace("Global.HasDescription()".Pastel(ConsoleColor.Cyan));
+        //public static bool HasDescriptor(byte byLocalSearchTerm, byte[] byaLocalSearchCollection, int iLocalSearchCollectionLength)
+        //{
+        //    lCurrentLogger.Trace("Global.HasDescriptor()".Pastel(ConsoleColor.Cyan));
 
-            for (var i = 0; i < iLocalSearchCollectionLength; i += byaLocalSearchCollection[i + 1] + 2)
-            {
-                if (byLocalSearchTerm == byaLocalSearchCollection[i])
-                    return true;
-            }
+        //    for (var i = 0; i < iLocalSearchCollectionLength; i += byaLocalSearchCollection[i + 1] + 2)
+        //    {
+        //        if (byLocalSearchTerm == byaLocalSearchCollection[i])
+        //            return true;
+        //    }
 
-            return false;
-        }
+        //    return false;
+        //}
 
-        public static string CleanupString(this string strLocalString)
-        {
-            lCurrentLogger.Trace("Global.CleanupString()".Pastel(ConsoleColor.Cyan));
+        //public static bool HasESDescriptor(ElementaryStreamDescriptors esdLocalSearchESDescriptor, byte[] byaLocalSearchCollection)
+        //{
+        //    lCurrentLogger.Trace("Global.HasESDescriptor()".Pastel(ConsoleColor.Cyan));
 
-            string strReturnString = strLocalString;
+        //    if (byaLocalSearchCollection.Length <= 0)
+        //        return false;
 
-            strReturnString = Regex.Replace(strReturnString, @"[\x00-\x1F]", string.Empty);
-            strReturnString = Regex.Replace(strReturnString, "\0", string.Empty);
+        //    var iCurrentESDescriptorBufferPosition = 0;
+        //    do
+        //    {
+        //        var iESDescriptorTag = GetBytesAsInt32(byaLocalSearchCollection[iCurrentESDescriptorBufferPosition..(iCurrentESDescriptorBufferPosition + 1)], true, 0, 8);
+        //        var iESDescriptorLength = GetBytesAsInt32(byaLocalSearchCollection[(iCurrentESDescriptorBufferPosition + 1)..(iCurrentESDescriptorBufferPosition + 2)], true, 0, 8);
 
-            return strReturnString;
-        }
+        //        if (iESDescriptorLength != 0 && (ElementaryStreamDescriptors)iESDescriptorTag == esdLocalSearchESDescriptor)
+        //            return true;
 
-        public static byte GetLSB(this byte byLocalByteValue)
-        {
-            lCurrentLogger.Trace("Global.GetLSB()".Pastel(ConsoleColor.Cyan));
+        //        iCurrentESDescriptorBufferPosition += 2 + iESDescriptorLength;
+        //    }
+        //    while (iCurrentESDescriptorBufferPosition < byaLocalSearchCollection.Length);
 
-            return (byte)(byLocalByteValue & 0x0F);
-        }
+        //    return false;
+        //}
     }
 
     public class IgnorePropertiesResolver(IEnumerable<string> propNamesToIgnore) : DefaultContractResolver

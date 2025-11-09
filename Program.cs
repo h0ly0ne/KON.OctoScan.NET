@@ -258,6 +258,13 @@ namespace KON.OctoScan.NET
                                                     lsFrequencies.Add(Convert.ToString(iCurrentFrequency));
                                                 }
                                             }
+                                            else
+                                            {
+                                                if (iFrequenciesRangeStart == iFrequenciesRangeEnd)
+                                                    lsFrequencies.Add(Convert.ToString(iFrequenciesRangeStart));
+                                                else
+                                                    lCurrentLogger.Warn("-» Invalid frequency start/end/step".Pastel(ConsoleColor.Yellow));
+                                            }
                                         }
                                     }
                                     else

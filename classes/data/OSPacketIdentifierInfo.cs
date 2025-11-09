@@ -51,43 +51,6 @@ namespace KON.OctoScan.NET
 
     public static class OSPacketIdentifierInfo_Extension
     {
-        public static int GetDescription(this OSPacketIdentifierInfo? opiiLocalOSPacketIdentifierInfo, byte[]? byaLocalBuffer, int iLocalLength)
-        {
-            lCurrentLogger.Trace("OSPacketIdentifierInfo.GetDescription()".Pastel(ConsoleColor.Cyan));
-
-            var i = 0;
-
-            if (byaLocalBuffer != null)
-            {
-                while (i < iLocalLength)
-                {
-                    int iPartialLength = byaLocalBuffer[(i + 1)..].Length;
-
-                    switch (byaLocalBuffer[i])
-                    {
-                        case 0x09:
-                        {
-                            if (iPartialLength == 0)
-                                break;
-                            else
-                            {
-                                //var casys = (ushort)((byaLocalBuffer[i + 2] << 8) | byaLocalBuffer[i + 3]);
-                                //var capid = GetPID(byaLocalBuffer[(i + 4)..]);
-
-                                break;
-                            }
-                        }
-                    }
-
-                    i += iPartialLength + 2;
-                }
-
-                return iLocalLength;
-            }
-
-            return 0;
-        }
-
         public static bool ValidateContinuityCounter(this OSPacketIdentifierInfo opiiLocalOSPacketIdentifierInfo, byte[] byaLocalBuffer)
         {
             lCurrentLogger.Trace("OSPacketIdentifierInfo.ValidateContinuityCounter()".Pastel(ConsoleColor.Cyan));

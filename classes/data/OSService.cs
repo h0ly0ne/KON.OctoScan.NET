@@ -18,10 +18,16 @@ namespace KON.OctoScan.NET
         public int iOriginalNetworkID;
         public int iProgramMapTable;
         public int iProgramClockReferencePacketIdentifier;
+
         public int iVideoPacketIdentifier;
+        public byte byVideoPacketIdentifierStreamType;
+
+        public byte byAudioChannels;
         public int[] iaAudioPacketIdentifiers = new int[MAX_ANUM];
+        public byte[] byaAudioPacketIdentifiersStreamType = new byte[MAX_ANUM];
+        public string[] saAudioPacketIdentifiersLanguage = new string[MAX_ANUM];
+
         public int iSubtitlePacketIdentifier;
         public int iTeletextPacketIdentifier;
-        public byte byAudioChannels;
     }
 }

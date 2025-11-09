@@ -218,7 +218,7 @@ namespace KON.OctoScan.NET
             if (string.IsNullOrEmpty(strCurrentMessage) || Encoding.ASCII.GetByteCount(strCurrentMessage) >= 256)
                 return;
 
-            SendData(ostLocalOSScanTransponder.osicOSSatIPConnection.nsSocketTCP, Encoding.ASCII.GetBytes(strCurrentMessage), Encoding.ASCII.GetByteCount(strCurrentMessage));
+            ostLocalOSScanTransponder.osicOSSatIPConnection.nsSocketTCP.SendData(Encoding.ASCII.GetBytes(strCurrentMessage), Encoding.ASCII.GetByteCount(strCurrentMessage));
         }
 
         public static bool RTSPCheckOK(this OSScanTransponder? ostLocalOSScanTransponder)
@@ -282,7 +282,7 @@ namespace KON.OctoScan.NET
             if (string.IsNullOrEmpty(strCurrentMessage) || Encoding.ASCII.GetByteCount(strCurrentMessage) >= 1024)
                 return;
 
-            SendData(ostLocalOSScanTransponder.osicOSSatIPConnection.nsSocketTCP, Encoding.ASCII.GetBytes(strCurrentMessage), Encoding.ASCII.GetByteCount(strCurrentMessage));
+            ostLocalOSScanTransponder.osicOSSatIPConnection.nsSocketTCP.SendData(Encoding.ASCII.GetBytes(strCurrentMessage), Encoding.ASCII.GetByteCount(strCurrentMessage));
         }
 
         public static bool RTSPSendPlay(this OSScanTransponder? ostLocalOSScanTransponder, string strLocalPIDs)
@@ -301,7 +301,7 @@ namespace KON.OctoScan.NET
             if (ostLocalOSScanTransponder.osicOSSatIPConnection.nsSocketTCP == null || string.IsNullOrEmpty(strCurrentMessage))
                 return false;
 
-            SendData(ostLocalOSScanTransponder.osicOSSatIPConnection.nsSocketTCP, Encoding.ASCII.GetBytes(strCurrentMessage), Encoding.ASCII.GetByteCount(strCurrentMessage));
+            ostLocalOSScanTransponder.osicOSSatIPConnection.nsSocketTCP.SendData(Encoding.ASCII.GetBytes(strCurrentMessage), Encoding.ASCII.GetByteCount(strCurrentMessage));
             Thread.Sleep(WAITTIME_FOR_RTSPCOMMAND);
 
             return true;
@@ -323,7 +323,7 @@ namespace KON.OctoScan.NET
             if (string.IsNullOrEmpty(strCurrentMessage) || Encoding.ASCII.GetByteCount(strCurrentMessage) >= 256)
                 return;
 
-            SendData(ostLocalOSScanTransponder.osicOSSatIPConnection.nsSocketTCP, Encoding.ASCII.GetBytes(strCurrentMessage), Encoding.ASCII.GetByteCount(strCurrentMessage));
+            ostLocalOSScanTransponder.osicOSSatIPConnection.nsSocketTCP.SendData(Encoding.ASCII.GetBytes(strCurrentMessage), Encoding.ASCII.GetByteCount(strCurrentMessage));
         }
 
         public static bool UpdatePIDs(this OSScanTransponder? ostLocalOSScanTransponder)

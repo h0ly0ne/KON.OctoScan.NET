@@ -1,9 +1,11 @@
 ﻿using System.Globalization;
 using System.Text;
 
+using Nito.HashAlgorithms;
 using Pastel;
 
 using static KON.OctoScan.NET.Constants;
+using static KON.OctoScan.NET.Enums;
 using static KON.OctoScan.NET.Global;
 
 namespace KON.OctoScan.NET
@@ -44,7 +46,7 @@ namespace KON.OctoScan.NET
                 for (var i = 8; i < iSectionLength - 4; i += 4)
                 {
                     var iProgramNumber = (baCurrentBuffer[i] << 8) | baCurrentBuffer[i + 1];
-                    var iPacketIdentifier = GetPID(baCurrentBuffer[(i + 2)..]);
+                    var iPacketIdentifier = GetBytesAsInt32(baCurrentBuffer[(i + 2)..(i + 4)], true, 0, 13);
 
                     if (iProgramNumber != 0)
                     {
@@ -65,92 +67,167 @@ namespace KON.OctoScan.NET
         {
             lCurrentLogger.Trace("OSTransportStreamFilter.AddProgramMapTableData()".Pastel(ConsoleColor.Cyan));
 
+            var crc32CurrentCalculatedCRC32 = new CRC32(CRC32.Definition.Mpeg2);
+            crc32CurrentCalculatedCRC32.Initialize();
             var opiiCurrentOSPacketIdentifierInfo = otsfLocalOSTransportStreamFilter.opiiOSPacketIdentifierInfo;
+
             if (opiiCurrentOSPacketIdentifierInfo != null)
             {
                 var byaCurrentBuffer = opiiCurrentOSPacketIdentifierInfo.byaBuffer;
                 if (byaCurrentBuffer != null)
                 {
-                    var iSectionLength = ToByteAsInteger(byaCurrentBuffer[1..]) + 3;
-                    var iProgramNumber = ToUShortAsInteger(byaCurrentBuffer[3..]);
-
-                    if (iProgramNumber != otsfLocalOSTransportStreamFilter.iTableExtension)
-                        return true;
-
-                    var i = 12;
-                    int iLength;
-
-                    if ((iLength = ToByteAsInteger(byaCurrentBuffer[10..])) != 0)
-                        i += opiiCurrentOSPacketIdentifierInfo.GetDescription(byaCurrentBuffer[i..], iLength);
-
-                    if (i != 12 + iLength)
-                        return true;
-
-                    var osCurrentOSService = opiiCurrentOSPacketIdentifierInfo.otsiOSTransportStreamInfo?.ostOSScanTransponder?.otiOSTransponderInfo.GetService(iProgramNumber);
-
-                    if (osCurrentOSService != null)
+                    for (int iCurrentBufferPosition = 0; iCurrentBufferPosition < byaCurrentBuffer.Length;)
                     {
-                        osCurrentOSService.iProgramClockReferencePacketIdentifier = GetPID(byaCurrentBuffer[8..]);
-                        osCurrentOSService.byAudioChannels = 0;
-                        osCurrentOSService.iProgramMapTable = (ushort)opiiCurrentOSPacketIdentifierInfo.iPacketID;
+                        if (byaCurrentBuffer[iCurrentBufferPosition] == 0)
+                            break;
 
-                        while (i < iSectionLength - 4)
+                        DVBTableSection dvbtTableIdentifier = (DVBTableSection)byaCurrentBuffer[iCurrentBufferPosition];
+                        var iSectionLength = GetBytesAsInt32(byaCurrentBuffer[(iCurrentBufferPosition + 1)..(iCurrentBufferPosition + 3)], true, 0, 10) + 3;
+                        lCurrentLogger.Trace($"Section Length: 0x{iSectionLength:X2} ({iSectionLength})".Pastel(ConsoleColor.Cyan));
+                        var iTableIDExtension = GetBytesAsInt32(byaCurrentBuffer[(iCurrentBufferPosition + 3)..(iCurrentBufferPosition + 5)], true, 0, 16);
+                        lCurrentLogger.Trace($"SID (Table ID Extension): 0x{iTableIDExtension:X4} ({iTableIDExtension})".Pastel(ConsoleColor.Cyan));
+                        var iVersionNumber = GetBytesAsInt32(byaCurrentBuffer[(iCurrentBufferPosition + 5)..(iCurrentBufferPosition + 6)], true, 1, 5);
+                        lCurrentLogger.Trace($"Version Number: 0x{iVersionNumber:X2} ({iVersionNumber})".Pastel(ConsoleColor.Cyan));
+                        var iCurrentNextIndicator = GetBytesAsInt32(byaCurrentBuffer[(iCurrentBufferPosition + 5)..(iCurrentBufferPosition + 6)], true, 0, 1);
+                        lCurrentLogger.Trace($"Current/Next Indicator: 0x{iCurrentNextIndicator:X2} ({iCurrentNextIndicator})".Pastel(ConsoleColor.Cyan));
+                        var iSectionNumber = GetBytesAsInt32(byaCurrentBuffer[(iCurrentBufferPosition + 6)..(iCurrentBufferPosition + 7)], true, 0, 8);
+                        lCurrentLogger.Trace($"Section Number: 0x{iSectionNumber:X2} ({iSectionNumber})".Pastel(ConsoleColor.Cyan));
+                        var iLastSectionNumber = GetBytesAsInt32(byaCurrentBuffer[(iCurrentBufferPosition + 7)..(iCurrentBufferPosition + 8)], true, 0, 8);
+                        lCurrentLogger.Trace($"Last Section Number: 0x{iLastSectionNumber:X2} ({iLastSectionNumber})".Pastel(ConsoleColor.Cyan));
+
+                        if (dvbtTableIdentifier == DVBTableSection.PMT)
                         {
-                            var iExtractedPID = GetPID(byaCurrentBuffer?[(i + 1)..]);
-                            var iExtractedLength = ToByteAsInteger(byaCurrentBuffer?[(i + 3)..]);
+                            if (iTableIDExtension != otsfLocalOSTransportStreamFilter.iTableExtension)
+                                return true;
 
-                            if (byaCurrentBuffer != null)
+                            var osCurrentOSService = opiiCurrentOSPacketIdentifierInfo.otsiOSTransportStreamInfo?.ostOSScanTransponder?.otiOSTransponderInfo.GetService(iTableIDExtension);
+                            if (osCurrentOSService != null)
                             {
-                                switch (byaCurrentBuffer[i])
+                                var iProgramClockReferencePacketIdentifier = GetBytesAsInt32(byaCurrentBuffer[(iCurrentBufferPosition + 8)..(iCurrentBufferPosition + 10)], true, 0, 13);
+                                lCurrentLogger.Trace($"PCRPID: 0x{iProgramClockReferencePacketIdentifier:X2} ({iProgramClockReferencePacketIdentifier})".Pastel(ConsoleColor.Cyan));
+
+                                osCurrentOSService.iProgramClockReferencePacketIdentifier = iProgramClockReferencePacketIdentifier;
+                                osCurrentOSService.iProgramMapTable = (ushort)opiiCurrentOSPacketIdentifierInfo.iPacketID;
+                                osCurrentOSService.iVideoPacketIdentifier = 0;
+                                osCurrentOSService.byVideoPacketIdentifierStreamType = 0;
+                                osCurrentOSService.byAudioChannels = 0;
+                                osCurrentOSService.iaAudioPacketIdentifiers = new int[MAX_ANUM];
+                                osCurrentOSService.byaAudioPacketIdentifiersStreamType = new byte[MAX_ANUM];
+                                osCurrentOSService.saAudioPacketIdentifiersLanguage = new string[MAX_ANUM];
+
+                                var iProgramInfoLength = GetBytesAsInt32(byaCurrentBuffer[(iCurrentBufferPosition + 10)..(iCurrentBufferPosition + 12)], true, 0, 10);
+                                lCurrentLogger.Trace($"Program Info Length: 0x{iProgramInfoLength:X2} ({iProgramInfoLength})".Pastel(ConsoleColor.Cyan));
+                                var iCurrentDescriptorBufferPosition = iCurrentBufferPosition + 12;
+                                if (iProgramInfoLength != 0)
                                 {
-                                    case 0x01: // MPEG1
-                                    case 0x02: // MPEG2
-                                    case 0x10: // MPEG4
-                                    case 0x1b: // H264
-                                    case 0x24: // HEVC
-                                    case 0x42: // CAVS
-                                    case 0xea: // VC1
-                                    case 0xd1: // DIRAC
-                                    {
-                                        osCurrentOSService.iVideoPacketIdentifier = iExtractedPID;
+                                    var baProgramDescriptorData = byaCurrentBuffer[iCurrentDescriptorBufferPosition..(iCurrentDescriptorBufferPosition + iProgramInfoLength)];
+                                    lCurrentLogger.Trace($"Program Descriptor Data: 0x{BitConverter.ToString(baProgramDescriptorData).Replace("-", string.Empty)}".Pastel(ConsoleColor.Cyan));
+                                    iCurrentDescriptorBufferPosition += iProgramInfoLength;
+                                }
 
-                                        break;
-                                    }
-                                    case 0x03: // MPEG1
-                                    case 0x04: // MPEG2
-                                    case 0x0F: // AAC
-                                    case 0x11: // AAC_LATM
-                                    case 0x81: // AC3
-                                    case 0x82: // DTS
-                                    case 0x83: // TRUEHD
-                                    {
-                                        if (osCurrentOSService.byAudioChannels < MAX_ANUM)
-                                            osCurrentOSService.iaAudioPacketIdentifiers[osCurrentOSService.byAudioChannels++] = iExtractedPID;
+                                while (iCurrentDescriptorBufferPosition < iSectionLength - 4)
+                                {
+                                    var iStreamType = GetBytesAsInt32(byaCurrentBuffer[iCurrentDescriptorBufferPosition..(iCurrentDescriptorBufferPosition + 1)], true, 0, 8);
+                                    lCurrentLogger.Trace($"Stream Type: 0x{iStreamType:X2} ({((MPEG2TSStreamType)iStreamType).ToString()})".Pastel(ConsoleColor.Cyan));
+                                    var iElementaryPID = GetBytesAsInt32(byaCurrentBuffer[(iCurrentDescriptorBufferPosition + 1)..(iCurrentDescriptorBufferPosition + 3)], true, 0, 13);
+                                    lCurrentLogger.Trace($"Elementary PID: 0x{iElementaryPID:X2} ({iElementaryPID})".Pastel(ConsoleColor.Cyan));
+                                    var iESInfoLength = GetBytesAsInt32(byaCurrentBuffer[(iCurrentDescriptorBufferPosition + 3)..(iCurrentDescriptorBufferPosition + 5)], true, 0, 10);
+                                    lCurrentLogger.Trace($"ES Info Length: 0x{iESInfoLength:X2} ({iESInfoLength})".Pastel(ConsoleColor.Cyan));
 
-                                        break;
-                                    }
-                                    case 0x06:
+                                    var bAudioInformationExisting = false;
+
+                                    switch ((MPEG2TSStreamType)iStreamType)
                                     {
-                                        if (HasDescription(0x56, byaCurrentBuffer[(i + 5)..], iExtractedLength))
-                                            osCurrentOSService.iTeletextPacketIdentifier = iExtractedPID;
-                                        else if (HasDescription(0x59, byaCurrentBuffer[(i + 5)..], iExtractedLength))
-                                            osCurrentOSService.iSubtitlePacketIdentifier = iExtractedPID;
-                                        else if (HasDescription(0x6a, byaCurrentBuffer[(i + 5)..], iExtractedLength) ||
-                                                 HasDescription(0x7a, byaCurrentBuffer[(i + 5)..], iExtractedLength))
+                                        case MPEG2TSStreamType.ISO_IEC_11172_2_MPEG1_Video:
+                                        case MPEG2TSStreamType.ITU_T_Rec_H_262_ISO_IEC_13818_2_MPEG2_Video:
+                                        case MPEG2TSStreamType.ISO_IEC_14496_2_MPEG4_Video:
+                                        case MPEG2TSStreamType.AVC_Stream_H264_Video:
+                                        case MPEG2TSStreamType.H265_HEVC_Video:
+                                        case MPEG2TSStreamType.Chinese_Video_Standard_CAVS_Video:
+                                        case MPEG2TSStreamType.BBC_Dirac_Ultra_HD_Video:
+                                        case MPEG2TSStreamType.Private_ES_VC1_Video:
                                         {
-                                            if (osCurrentOSService.byAudioChannels < MAX_ANUM)
-                                                osCurrentOSService.iaAudioPacketIdentifiers[osCurrentOSService.byAudioChannels++] = iExtractedPID;
+                                            osCurrentOSService.iVideoPacketIdentifier = iElementaryPID;
+                                            osCurrentOSService.byVideoPacketIdentifierStreamType = (byte)iStreamType;
+                                            break;
+                                        }
+                                        case MPEG2TSStreamType.ISO_IEC_11172_3_MPEG1_Audio:
+                                        case MPEG2TSStreamType.ISO_IEC_13818_3_MPEG2_Audio:
+                                        case MPEG2TSStreamType.ISO_IEC_13818_7_AAC_Audio:
+                                        case MPEG2TSStreamType.ISO_IEC_14496_3_LATM_AAC_Audio:
+                                        case MPEG2TSStreamType.A52_AC3_Audio:
+                                        case MPEG2TSStreamType.HDMV_DTS_Audio:
+                                        case MPEG2TSStreamType.LPCM_TrueHD_Audio:
+                                        {
+                                            bAudioInformationExisting = true;
+                                            break;
+                                        }
+                                    }
+
+                                    var iCurrentESDescriptorBufferPosition = iCurrentDescriptorBufferPosition + 5;
+                                    do
+                                    {
+                                        var iESDescriptorTag = GetBytesAsInt32(byaCurrentBuffer[iCurrentESDescriptorBufferPosition..(iCurrentESDescriptorBufferPosition + 1)], true, 0, 8);
+                                        lCurrentLogger.Trace($"ES Descriptor Tag: 0x{iESDescriptorTag:X2} ({((ElementaryStreamDescriptors)iESDescriptorTag).ToString()})".Pastel(ConsoleColor.Cyan));
+                                        var iESDescriptorLength = GetBytesAsInt32(byaCurrentBuffer[(iCurrentESDescriptorBufferPosition + 1)..(iCurrentESDescriptorBufferPosition + 2)], true, 0, 8);
+
+                                        if (iESDescriptorLength != 0)
+                                        {
+                                            switch ((ElementaryStreamDescriptors)iESDescriptorTag)
+                                            {
+                                                case ElementaryStreamDescriptors.teletext_descriptor:
+                                                {
+                                                    osCurrentOSService.iTeletextPacketIdentifier = iElementaryPID;
+                                                    break;
+                                                }
+                                                case ElementaryStreamDescriptors.subtitling_descriptor:
+                                                {
+                                                    osCurrentOSService.iSubtitlePacketIdentifier = iElementaryPID;
+                                                    break;
+                                                }
+                                                case ElementaryStreamDescriptors.AC_3_descriptor:
+                                                {
+                                                    bAudioInformationExisting = true;
+                                                    break;
+                                                }
+                                                case ElementaryStreamDescriptors.ISO_639_language_descriptor:
+                                                {
+                                                    var baISO639LanguageCode = byaCurrentBuffer[(iCurrentESDescriptorBufferPosition + 2)..(iCurrentESDescriptorBufferPosition + 2 + iESDescriptorLength - 1)];
+                                                    var strISO639LanguageCode = Encoding.UTF8.GetString(baISO639LanguageCode);
+                                                    var lCurrentLanguage = ISO639LanguageCollection.AllISO639Languages.FirstOrDefault(llCurrentLanguage => llCurrentLanguage.ISO6393Code.ToLower().Equals(strISO639LanguageCode.ToLower(), StringComparison.InvariantCultureIgnoreCase));
+
+                                                    strISO639LanguageCode = lCurrentLanguage != null ? lCurrentLanguage.ISO6393Code : ISO639LanguageCollection.AllISO639Languages.First(llCurrentLanguage => llCurrentLanguage.ISO6393Code.ToLower().Equals("mis", StringComparison.InvariantCultureIgnoreCase)).ISO6393Code;
+                                                    lCurrentLogger.Trace($"ISO639 Language Code: 0x{strISO639LanguageCode.ToHexString()} ({strISO639LanguageCode})".Pastel(ConsoleColor.Cyan));
+                                                    osCurrentOSService.saAudioPacketIdentifiersLanguage[osCurrentOSService.byAudioChannels] = strISO639LanguageCode;
+                                                    break;
+                                                }
+                                            }
                                         }
 
-                                        break;
+                                        iCurrentESDescriptorBufferPosition += 2 + iESDescriptorLength;
                                     }
-                                }
-                            }
+                                    while (iCurrentESDescriptorBufferPosition < iCurrentDescriptorBufferPosition + 5 + iESInfoLength);
+                                    
+                                    if (bAudioInformationExisting && osCurrentOSService.byAudioChannels < MAX_ANUM)
+                                    {
+                                        osCurrentOSService.iaAudioPacketIdentifiers[osCurrentOSService.byAudioChannels] = iElementaryPID;
+                                        osCurrentOSService.byaAudioPacketIdentifiersStreamType[osCurrentOSService.byAudioChannels] = (byte)iStreamType;
+                                        osCurrentOSService.byAudioChannels++;
+                                    }
 
-                            i += 5 + iExtractedLength;
+                                    iCurrentDescriptorBufferPosition += 5 + iESInfoLength;
+                                }
+
+                                osCurrentOSService.bGotFromProgramMapTable = true;
+                            }
                         }
 
-                        osCurrentOSService.bGotFromProgramMapTable = true;
+                        var iCRC32 = GetBytesAsInt64(byaCurrentBuffer[(iCurrentBufferPosition + iSectionLength - 4)..(iCurrentBufferPosition + iSectionLength)], true, 0, 32);
+                        lCurrentLogger.Trace($"CRC32: 0x{iCRC32:X8} ({iCRC32})".Pastel(ConsoleColor.Cyan));
+                        var baCalculatedCRC32 = GetBytesAsInt64(crc32CurrentCalculatedCRC32.ComputeHash(byaCurrentBuffer[iCurrentBufferPosition..(iCurrentBufferPosition + iSectionLength - 4)]), false, 0, 32);
+                        lCurrentLogger.Trace($"Calculated CRC32: 0x{baCalculatedCRC32:X8} ({baCalculatedCRC32})".Pastel(ConsoleColor.Cyan));
+                        
+                        iCurrentBufferPosition += iSectionLength;
                     }
                 }
             }
@@ -564,8 +641,8 @@ namespace KON.OctoScan.NET
                                 if (osCurrentOSService.strName.Length > 80)
                                     lCurrentLogger.Warn($"SERVICENAME OVERFLOW {osCurrentOSService.strName} LENGTH = {osCurrentOSService.strName.Length}".Pastel(ConsoleColor.Yellow));
 
-                                osCurrentOSService.strProviderName = osCurrentOSService.strProviderName.CleanupString();
-                                osCurrentOSService.strName = osCurrentOSService.strName.CleanupString();
+                                osCurrentOSService.strProviderName = osCurrentOSService.strProviderName.CleanupInvalidData();
+                                osCurrentOSService.strName = osCurrentOSService.strName.CleanupInvalidData();
 
                                 osCurrentOSService.bGotFromServiceDescriptorTable = true;
                             }
@@ -590,7 +667,7 @@ namespace KON.OctoScan.NET
             {
                 var bCurrentTableID = byaCurrentBuffer[0];
                 var iCurrentSectionLength = ToByteAsInteger(byaCurrentBuffer[1..3]) + 3;
-                var iCurrentServiceID = ToUShortAsInteger(byaCurrentBuffer[3..5]);
+                var iCurrentServiceID =  ToUShortAsInteger(byaCurrentBuffer[3..5]);
                 var iCurrentTransportStreamID = ToUShortAsInteger(byaCurrentBuffer[8..10]);
                 var iCurrentOriginalNetworkID = ToUShortAsInteger(byaCurrentBuffer[10..12]);
                 var osCurrentOSService = opiiCurrentOSPacketIdentifierInfo?.otsiOSTransportStreamInfo?.ostOSScanTransponder?.otiOSTransponderInfo.GetService(iCurrentServiceID);
@@ -667,14 +744,14 @@ namespace KON.OctoScan.NET
                                     var iCurrentStringLength = Convert.ToInt32(byaCurrentBuffer[iCurrentItteratorOffset]);
 
                                     if (iCurrentStringLength > 0)
-                                        oeCurrentOSEvent.strName = eCurrentEncoding.GetString(byaCurrentBuffer, iCurrentItteratorOffset + 1, iCurrentStringLength).CleanupString();
+                                        oeCurrentOSEvent.strName = eCurrentEncoding.GetString(byaCurrentBuffer, iCurrentItteratorOffset + 1, iCurrentStringLength).CleanupInvalidData();
 
                                     iEITShortSize += iCurrentStringLength;
                                     iCurrentItteratorOffset += iCurrentStringLength + 1;
                                     iCurrentStringLength = byaCurrentBuffer[iCurrentItteratorOffset];
 
                                     if (iCurrentStringLength > 0)
-                                        oeCurrentOSEvent.strText = eCurrentEncoding.GetString(byaCurrentBuffer, iCurrentItteratorOffset + 1, iCurrentStringLength).CleanupString();
+                                        oeCurrentOSEvent.strText = eCurrentEncoding.GetString(byaCurrentBuffer, iCurrentItteratorOffset + 1, iCurrentStringLength).CleanupInvalidData();
 
                                     iEITShortSize += iCurrentStringLength;
                                 }

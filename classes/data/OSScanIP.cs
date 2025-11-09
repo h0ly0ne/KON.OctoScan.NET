@@ -1,4 +1,5 @@
 ﻿using System.Data;
+
 using NanoXLSX;
 using Pastel;
 using Polly;
@@ -295,26 +296,69 @@ namespace KON.OctoScan.NET
 
                     foreach (var fiCurrentOSServiceItemFieldInfo in typeof(OSService).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name != "oloeOSListOSEvent" && fiCurrentFieldInfo.Name != "byAudioChannels" && fiCurrentFieldInfo.Name != "bGotFromProgramMapTable" && fiCurrentFieldInfo.Name != "bGotFromServiceDescriptorTable" && fiCurrentFieldInfo.Name != "iEventInformationTablePresentFollowing" && fiCurrentFieldInfo.Name != "iEventInformationTableSchedule"))
                     {
-                        if (fiCurrentOSServiceItemFieldInfo.Name is not "iaAudioPacketIdentifiers")
+                        if (fiCurrentOSServiceItemFieldInfo.Name is 
+                            not "byVideoPacketIdentifierStreamType" and
+                            not "iaAudioPacketIdentifiers" and 
+                            not "byaAudioPacketIdentifiersStreamType" and
+                            not "saAudioPacketIdentifiersLanguage")
                         {
                             drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem);
                         }
                         else
                         {
-                            if ((byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0) > 0 && ((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0] != 0)
+                            if (fiCurrentOSServiceItemFieldInfo.Name is "byVideoPacketIdentifierStreamType")
                             {
-                                var strCurrentAPIDs = Convert.ToString(((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0]);
-
-                                for (var iCurrentAPIDCounter = 1; iCurrentAPIDCounter < (byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0); iCurrentAPIDCounter += 1)
-                                {
-                                    if (((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDCounter] != 0)
-                                        strCurrentAPIDs += "," + Convert.ToString(((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDCounter]);
-                                }
-
-                                drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = strCurrentAPIDs;
+                                drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = GetBytesAsInt32([(byte)(fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem) ?? 0)], false, 0, 8).ToString("X2");
                             }
-                            else
-                                drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = string.Empty;
+                            else if (fiCurrentOSServiceItemFieldInfo.Name is "iaAudioPacketIdentifiers")
+                            {
+                                if ((byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0) > 0 && ((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0] != 0)
+                                {
+                                    var strCurrentAPIDs = Convert.ToString(((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0]);
+
+                                    for (var iCurrentAPIDCounter = 1; iCurrentAPIDCounter < (byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0); iCurrentAPIDCounter += 1)
+                                    {
+                                        if (((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDCounter] != 0)
+                                            strCurrentAPIDs += "," + Convert.ToString(((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDCounter]);
+                                    }
+
+                                    drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = strCurrentAPIDs;
+                                }
+                                else
+                                    drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = string.Empty;
+                            }
+                            else if (fiCurrentOSServiceItemFieldInfo.Name is "byaAudioPacketIdentifiersStreamType")
+                            {
+                                if ((byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0) > 0 && fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem) != null)
+                                {
+                                    var strCurrentAPIDSTs = GetBytesAsInt32([((byte[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0]], false, 0, 8).ToString("X2");
+
+                                    for (var iCurrentAPIDSTCounter = 1; iCurrentAPIDSTCounter < (byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0); iCurrentAPIDSTCounter += 1)
+                                    {
+                                        strCurrentAPIDSTs += "," + GetBytesAsInt32([((byte[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDSTCounter]], false, 0, 8).ToString("X2");
+                                    }
+
+                                    drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = strCurrentAPIDSTs;
+                                }
+                                else
+                                    drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = string.Empty;
+                            }
+                            else if (fiCurrentOSServiceItemFieldInfo.Name is "saAudioPacketIdentifiersLanguage")
+                            {
+                                if ((byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0) > 0 && fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem) != null)
+                                {
+                                    var strCurrentAPIDLANGs = ((string[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0];
+
+                                    for (var iCurrentAPIDLANGCounter = 1; iCurrentAPIDLANGCounter < (byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0); iCurrentAPIDLANGCounter += 1)
+                                    {
+                                        strCurrentAPIDLANGs += "," + ((string[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDLANGCounter];
+                                    }
+
+                                    drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = strCurrentAPIDLANGs;
+                                }
+                                else
+                                    drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = string.Empty;
+                            }
                         }
                     }
 

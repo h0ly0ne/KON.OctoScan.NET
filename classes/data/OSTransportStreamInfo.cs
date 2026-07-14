@@ -44,32 +44,4 @@ namespace KON.OctoScan.NET
             }
         }
     }
-
-    public static class OSTransportStreamInfo_Extension
-    {
-        public static void ProcessTransponder(this OSTransportStreamInfo otsiLocalOSTransportStreamInfo, byte[] byaLocalBuffer)
-        {
-            lCurrentLogger.Trace("OSTransportStreamInfo.ProcessTransponder()".Pastel(ConsoleColor.Cyan));
-
-            var iPID = 0x1FFF & ((byaLocalBuffer[1] << 8) | byaLocalBuffer[2]);
-            var opiiCurrentOSPacketIdentifierInfo = otsiLocalOSTransportStreamInfo.opiiOSPacketIdentifierInfo?[iPID];
-
-            if (opiiCurrentOSPacketIdentifierInfo != null)
-            {
-                if (opiiCurrentOSPacketIdentifierInfo is { bUsed: false })
-                    return;
-
-                if (opiiCurrentOSPacketIdentifierInfo is { byaBuffer: null })
-                {
-                    opiiCurrentOSPacketIdentifierInfo.byaBuffer = new byte[4096];
-                    if (opiiCurrentOSPacketIdentifierInfo is { byaBuffer: null })
-                        return;
-
-                    opiiCurrentOSPacketIdentifierInfo.byContinuityCounter = 0xFF;
-                }
-
-                opiiCurrentOSPacketIdentifierInfo.BuildSection(byaLocalBuffer);
-            }
-        }
-    }
 }

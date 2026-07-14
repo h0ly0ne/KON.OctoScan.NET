@@ -1,0 +1,329 @@
+﻿using System.Data;
+
+using NanoXLSX;
+using Pastel;
+using Polly;
+
+using static KON.OctoScan.NET.Constants;
+using static KON.OctoScan.NET.Global;
+
+namespace KON.OctoScan.NET
+{
+    public static class OSScanIP_Extension
+    {
+        extension(OSScanIP osiLocalOSScanIP)
+        {
+            public bool AddTransponderInfo(OSTransponderInfo otiLocalOSTransponderInfo)
+            {
+                lCurrentLogger.Trace("OSScanIP.AddTransponderInfo()".Pastel(ConsoleColor.Cyan));
+
+                if (osiLocalOSScanIP.olotiOSListOSTransponderInfo == null)
+                    return false;
+
+                if (osiLocalOSScanIP.olotiOSListOSTransponderInfoDone == null)
+                    return false;
+
+                if (osiLocalOSScanIP.olotiOSListOSTransponderInfo.Any(otiCurrentOSTransponderInfo => CompareTransponderInfo(otiCurrentOSTransponderInfo, otiLocalOSTransponderInfo)))
+                    return false;
+
+                if (osiLocalOSScanIP.olotiOSListOSTransponderInfoDone.Any(otiCurrentOSTransponderInfo => CompareTransponderInfo(otiCurrentOSTransponderInfo, otiLocalOSTransponderInfo)))
+                    return false;
+
+                otiLocalOSTransponderInfo.olosOSListOSService.Initialize();
+                osiLocalOSScanIP.olotiOSListOSTransponderInfo.AddLast(otiLocalOSTransponderInfo);
+
+                return true;
+            }
+
+            public bool Scan(long lLocalTimeout = 600, int iLocalScanRetries = 3, int iLocalTransponderRetries = 10)
+            {
+                lCurrentLogger.Trace("OSScanIP.Scan()".Pastel(ConsoleColor.Cyan));
+
+                while (!bDone && osiLocalOSScanIP is { olotiOSListOSTransponderInfo: not null } && !osiLocalOSScanIP.olotiOSListOSTransponderInfo.IsEmpty())
+                {
+                    var ostCurrentOSScanTransponder = osiLocalOSScanIP.ostOSScanTransponder;
+                    var otsiCurrentOSTransportStreamInfo = ostCurrentOSScanTransponder?.otsiOSTransportStreamInfo;
+
+                    otsiCurrentOSTransportStreamInfo?.Init();
+
+                    if (ostCurrentOSScanTransponder == null)
+                        return false;
+
+                    ostCurrentOSScanTransponder.osiOSScanIP = osiLocalOSScanIP;
+
+                    if (ostCurrentOSScanTransponder.osicOSSatIPConnection == null)
+                        return false;
+
+                    ostCurrentOSScanTransponder.osicOSSatIPConnection.iPort = 554;
+                    ostCurrentOSScanTransponder.osicOSSatIPConnection.strHost = osiLocalOSScanIP.strHost;
+
+                    if (otsiCurrentOSTransportStreamInfo == null)
+                        return false;
+
+                    otsiCurrentOSTransportStreamInfo.ostOSScanTransponder = ostCurrentOSScanTransponder;
+                    var otiCurrentOSTransponderInfo = osiLocalOSScanIP.olotiOSListOSTransponderInfo.First();
+                    ostCurrentOSScanTransponder.osicOSSatIPConnection.strTune = otiCurrentOSTransponderInfo?.ToString();
+
+                    lCurrentLogger.Info($"TUNE {ostCurrentOSScanTransponder.osicOSSatIPConnection.strTune}".Pastel(ConsoleColor.Magenta));
+
+                    ostCurrentOSScanTransponder.otiOSTransponderInfo = otiCurrentOSTransponderInfo;
+                    var iStartTime = CurrentTimestamp();
+
+                    var cCurrentContext = new Context { { "Retries", 0 } };
+                    Policy.HandleResult<bool>(r => r != true).WaitAndRetry(iLocalScanRetries, _ => TimeSpan.FromSeconds(0), onRetry: (_, _, retryCount, context) => { context["Retries"] = retryCount; }).Execute(delegate { ostCurrentOSScanTransponder.Scan(lLocalTimeout: lLocalTimeout, iLocalTransponderRetries: iLocalTransponderRetries); return otiCurrentOSTransponderInfo?.olosOSListOSService.Count > 0; }, cCurrentContext);
+                    osiLocalOSScanIP.lRetries = Convert.ToInt32(cCurrentContext["Retries"]);
+
+                    var iEndTime = CurrentTimestamp();
+                    otsiCurrentOSTransportStreamInfo.Dispose();
+
+                    osiLocalOSScanIP.olotiOSListOSTransponderInfo?.Remove(otiCurrentOSTransponderInfo);
+                    osiLocalOSScanIP.olotiOSListOSTransponderInfoDone?.AddLast(otiCurrentOSTransponderInfo);
+
+                    lCurrentLogger.Info($"OPERATION(S) {(ostCurrentOSScanTransponder.bTimedOut ? "TIMED OUT/NO RESULT" : "FINISHED (" + otiCurrentOSTransponderInfo?.olosOSListOSService.Count + " SERVICES FOUND)")} (AND TOOK {iEndTime - iStartTime} SECOND(S) AND {ostCurrentOSScanTransponder.lRetries + osiLocalOSScanIP.lRetries} RETRY)".Pastel(ostCurrentOSScanTransponder.bTimedOut ? ConsoleColor.Yellow : ConsoleColor.Green));
+                }
+
+                return true;
+            }
+
+            public void ExportEventsToExcel()
+            {
+                lCurrentLogger.Trace("OSScanIP.ExportEventsToExcel()".Pastel(ConsoleColor.Cyan));
+
+                //TODO - Implementation missing
+            }
+
+            /// <summary>
+            /// OSScanIP.ExportServicesToExcel()
+            /// </summary>
+            /// <param name="strLocalFilename"></param>
+            public void ExportServicesToExcel(string strLocalFilename = "ExportServices")
+            {
+                lCurrentLogger.Trace("OSScanIP.ExportServicesToExcel()".Pastel(ConsoleColor.Cyan));
+
+                var strCurrentFilename = DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_" + strLocalFilename + ".xlsx";
+                var wbCurrentWorkbook = new Workbook(strCurrentFilename, strLocalFilename);
+                var wsCurrentWorksheet = wbCurrentWorkbook.GetWorksheet(strLocalFilename);
+
+                wbCurrentWorkbook.SetCurrentWorksheet(wsCurrentWorksheet);
+                wsCurrentWorksheet.SetCurrentRowNumber(0);
+
+                if (osiLocalOSScanIP.olotiOSListOSTransponderInfoDone is { Count: > 0 })
+                {
+                    foreach (var fiCurrentOSTransponderInfoHeaderFieldInfo in typeof(OSTransponderInfo).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name == "iFrequency"))
+                    {
+                        wsCurrentWorksheet.AddNextCell(fiCurrentOSTransponderInfoHeaderFieldInfo.Name);
+                    }
+
+                    foreach (var fiCurrentOSServiceHeaderFieldInfo in typeof(OSService).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name != "oloeOSListOSEvent" && fiCurrentFieldInfo.Name != "byAudioChannels" && fiCurrentFieldInfo.Name != "bGotFromProgramMapTable" && fiCurrentFieldInfo.Name != "bGotFromServiceDescriptorTable" && fiCurrentFieldInfo.Name != "iEventInformationTablePresentFollowing" && fiCurrentFieldInfo.Name != "iEventInformationTableSchedule"))
+                    {
+                        wsCurrentWorksheet.AddNextCell(fiCurrentOSServiceHeaderFieldInfo.Name);
+                    }
+
+                    var fCorrectionFactorForColumnFilter = 3 * EXCEL_CHARACTER_TO_WIDTH_CONSTANT;
+                    float fProviderNamePropertyMaximumLength = 0;
+                    float fNamePropertyMaximumLength = 0;
+
+                    foreach (var otiCurrentOSTransponderInfo in osiLocalOSScanIP.olotiOSListOSTransponderInfoDone)
+                    {
+                        foreach (var osCurrentOSServiceItem in otiCurrentOSTransponderInfo?.olosOSListOSService!)
+                        {
+                            wsCurrentWorksheet.GoToNextRow();
+
+                            foreach (var fiCurrentOSTransponderInfoHeaderFieldInfo in typeof(OSTransponderInfo).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name == "iFrequency"))
+                            {
+                                wsCurrentWorksheet.AddNextCell(fiCurrentOSTransponderInfoHeaderFieldInfo.GetValue(otiCurrentOSTransponderInfo));
+                            }
+
+                            foreach (var fiCurrentOSServiceItemFieldInfo in typeof(OSService).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name != "oloeOSListOSEvent" && fiCurrentFieldInfo.Name != "byAudioChannels" && fiCurrentFieldInfo.Name != "bGotFromProgramMapTable" && fiCurrentFieldInfo.Name != "bGotFromServiceDescriptorTable" && fiCurrentFieldInfo.Name != "iEventInformationTablePresentFollowing" && fiCurrentFieldInfo.Name != "iEventInformationTableSchedule"))
+                            {
+                                if (fiCurrentOSServiceItemFieldInfo.Name is not "iaAudioPacketIdentifiers")
+                                {
+                                    wsCurrentWorksheet.AddNextCell(fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem));
+                                }
+                                else
+                                {
+                                    if ((byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0) > 0 && ((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0] != 0)
+                                    {
+                                        var strCurrentAPIDs = Convert.ToString(((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0]);
+
+                                        for (var iCurrentAPIDCounter = 1; iCurrentAPIDCounter < (byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0); iCurrentAPIDCounter += 1)
+                                        {
+                                            if (((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDCounter] != 0)
+                                                strCurrentAPIDs += "," + Convert.ToString(((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDCounter]);
+                                        }
+
+                                        wsCurrentWorksheet.AddNextCell(strCurrentAPIDs);
+                                    }
+                                    else
+                                        wsCurrentWorksheet.AddNextCell(string.Empty);
+                                }
+                            }
+                        }
+
+                        var fProviderNamePropertyMaximumLengthCurrent = otiCurrentOSTransponderInfo.olosOSListOSService.Select(osCurrentOSServiceItem => osCurrentOSServiceItem.strProviderName.Length).Prepend(0).Max() * EXCEL_CHARACTER_TO_WIDTH_CONSTANT + fCorrectionFactorForColumnFilter;
+                        if (fProviderNamePropertyMaximumLengthCurrent > fProviderNamePropertyMaximumLength)
+                            fProviderNamePropertyMaximumLength = fProviderNamePropertyMaximumLengthCurrent;
+                        var fNamePropertyMaximumLengthCurrent = otiCurrentOSTransponderInfo.olosOSListOSService.Select(osCurrentOSServiceItem => osCurrentOSServiceItem.strName.Length).Prepend(0).Max() * EXCEL_CHARACTER_TO_WIDTH_CONSTANT + fCorrectionFactorForColumnFilter;
+                        if (fNamePropertyMaximumLengthCurrent > fNamePropertyMaximumLength)
+                            fNamePropertyMaximumLength = fNamePropertyMaximumLengthCurrent;
+                    }
+
+                    for (var iCurrentColumnNumber = 0; iCurrentColumnNumber <= wsCurrentWorksheet.GetLastColumnNumber(); iCurrentColumnNumber++)
+                    {
+                        var fCurrentMaximumLengthValuesWithHeader = Convert.ToSingle(Convert.ToString(wsCurrentWorksheet.GetCell(iCurrentColumnNumber, 0).Value)!.Length) * EXCEL_CHARACTER_TO_WIDTH_CONSTANT + fCorrectionFactorForColumnFilter;
+
+                        switch (iCurrentColumnNumber)
+                        {
+                            case 1:
+                            {
+                                if (fCurrentMaximumLengthValuesWithHeader < fProviderNamePropertyMaximumLength)
+                                    fCurrentMaximumLengthValuesWithHeader = fProviderNamePropertyMaximumLength;
+                                break;
+                            }
+                            case 2:
+                            {
+                                if (fCurrentMaximumLengthValuesWithHeader < fNamePropertyMaximumLength)
+                                    fCurrentMaximumLengthValuesWithHeader = fNamePropertyMaximumLength;
+                                break;
+                            }
+                        }
+
+                        wsCurrentWorksheet.SetColumnWidth(iCurrentColumnNumber, fCurrentMaximumLengthValuesWithHeader);
+                    }
+                }
+
+                wsCurrentWorksheet.SetAutoFilter(0, wsCurrentWorksheet.GetLastColumnNumber());
+                wbCurrentWorkbook.Save();
+            }
+
+            /// <summary>
+            /// OSScanIP.ExportServicesToDataTable()
+            /// </summary>
+            /// <param name="strLocalDataTableName"></param>
+            /// <returns></returns>
+            public DataTable ExportServicesToDataTable(string strLocalDataTableName = "ExportServices")
+            {
+                lCurrentLogger.Trace("OSScanIP.ExportServicesToDataTable()".Pastel(ConsoleColor.Cyan));
+
+                DataTable dtLocalDataTable = new() { TableName = strLocalDataTableName };
+
+                if (osiLocalOSScanIP.olotiOSListOSTransponderInfoDone is not { Count: > 0 })
+                    return dtLocalDataTable;
+
+                foreach (var fiCurrentOSTransponderInfoHeaderFieldInfo in typeof(OSTransponderInfo).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name == "iFrequency"))
+                {
+                    dtLocalDataTable.Columns.Add(fiCurrentOSTransponderInfoHeaderFieldInfo.Name);
+                }
+
+                foreach (var fiCurrentOSServiceHeaderFieldInfo in typeof(OSService).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name != "oloeOSListOSEvent" && fiCurrentFieldInfo.Name != "byAudioChannels" && fiCurrentFieldInfo.Name != "bGotFromProgramMapTable" && fiCurrentFieldInfo.Name != "bGotFromServiceDescriptorTable" && fiCurrentFieldInfo.Name != "iEventInformationTablePresentFollowing" && fiCurrentFieldInfo.Name != "iEventInformationTableSchedule"))
+                {
+                    dtLocalDataTable.Columns.Add(fiCurrentOSServiceHeaderFieldInfo.Name);
+                }
+
+                foreach (var otiCurrentOSTransponderInfo in osiLocalOSScanIP.olotiOSListOSTransponderInfoDone)
+                {
+                    foreach (var osCurrentOSServiceItem in otiCurrentOSTransponderInfo?.olosOSListOSService!)
+                    {
+                        var drLocalDataRow = dtLocalDataTable.NewRow();
+
+                        foreach (var fiCurrentOSTransponderInfoHeaderFieldInfo in typeof(OSTransponderInfo).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name == "iFrequency"))
+                        {
+                            drLocalDataRow[fiCurrentOSTransponderInfoHeaderFieldInfo.Name] = fiCurrentOSTransponderInfoHeaderFieldInfo.GetValue(otiCurrentOSTransponderInfo);
+                        }
+
+                        foreach (var fiCurrentOSServiceItemFieldInfo in typeof(OSService).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name != "oloeOSListOSEvent" && fiCurrentFieldInfo.Name != "byAudioChannels" && fiCurrentFieldInfo.Name != "bGotFromProgramMapTable" && fiCurrentFieldInfo.Name != "bGotFromServiceDescriptorTable" && fiCurrentFieldInfo.Name != "iEventInformationTablePresentFollowing" && fiCurrentFieldInfo.Name != "iEventInformationTableSchedule"))
+                        {
+                            if (fiCurrentOSServiceItemFieldInfo.Name is
+                                not "byVideoPacketIdentifierStreamType" and
+                                not "iaAudioPacketIdentifiers" and
+                                not "byaAudioPacketIdentifiersStreamType" and
+                                not "saAudioPacketIdentifiersLanguage")
+                            {
+                                drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem);
+                            }
+                            else
+                            {
+                                if (fiCurrentOSServiceItemFieldInfo.Name is "byVideoPacketIdentifierStreamType")
+                                {
+                                    drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = GetBytesAsInt32([(byte)(fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem) ?? 0)], false, 0, 8).ToString("X2");
+                                }
+                                else if (fiCurrentOSServiceItemFieldInfo.Name is "iaAudioPacketIdentifiers")
+                                {
+                                    if ((byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0) > 0 && ((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0] != 0)
+                                    {
+                                        var strCurrentAPIDs = Convert.ToString(((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0]);
+
+                                        for (var iCurrentAPIDCounter = 1; iCurrentAPIDCounter < (byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0); iCurrentAPIDCounter += 1)
+                                        {
+                                            if (((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDCounter] != 0)
+                                                strCurrentAPIDs += "," + Convert.ToString(((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDCounter]);
+                                        }
+
+                                        drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = strCurrentAPIDs;
+                                    }
+                                    else
+                                        drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = string.Empty;
+                                }
+                                else if (fiCurrentOSServiceItemFieldInfo.Name is "byaAudioPacketIdentifiersStreamType")
+                                {
+                                    if ((byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0) > 0 && fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem) != null)
+                                    {
+                                        var strCurrentAPIDSTs = GetBytesAsInt32([((byte[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0]], false, 0, 8).ToString("X2");
+
+                                        for (var iCurrentAPIDSTCounter = 1; iCurrentAPIDSTCounter < (byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0); iCurrentAPIDSTCounter += 1)
+                                        {
+                                            strCurrentAPIDSTs += "," + GetBytesAsInt32([((byte[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDSTCounter]], false, 0, 8).ToString("X2");
+                                        }
+
+                                        drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = strCurrentAPIDSTs;
+                                    }
+                                    else
+                                        drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = string.Empty;
+                                }
+                                else if (fiCurrentOSServiceItemFieldInfo.Name is "saAudioPacketIdentifiersLanguage")
+                                {
+                                    if ((byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0) > 0 && fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem) != null)
+                                    {
+                                        var strCurrentAPIDLANGs = ((string[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0];
+
+                                        for (var iCurrentAPIDLANGCounter = 1; iCurrentAPIDLANGCounter < (byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0); iCurrentAPIDLANGCounter += 1)
+                                        {
+                                            strCurrentAPIDLANGs += "," + ((string[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDLANGCounter];
+                                        }
+
+                                        drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = strCurrentAPIDLANGs;
+                                    }
+                                    else
+                                        drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = string.Empty;
+                                }
+                            }
+                        }
+
+                        dtLocalDataTable.Rows.Add(drLocalDataRow);
+                    }
+                }
+
+                return dtLocalDataTable;
+            }
+        }
+
+        public static bool CompareTransponderInfo(OSTransponderInfo? otiLocalSourceOSTransponderInfo, OSTransponderInfo? otiLocalDestinationOSTransponderInfo)
+        {
+            lCurrentLogger.Trace("OSScanIP.CompareTransponderInfo()".Pastel(ConsoleColor.Cyan));
+
+            if (otiLocalSourceOSTransponderInfo == null || otiLocalDestinationOSTransponderInfo == null)
+                return false;
+
+            if (otiLocalSourceOSTransponderInfo.iModulationSystem != otiLocalDestinationOSTransponderInfo.iModulationSystem)
+                return false;
+
+            if (otiLocalSourceOSTransponderInfo.iSource != otiLocalDestinationOSTransponderInfo.iSource)
+                return false;
+
+            if (otiLocalSourceOSTransponderInfo.iFrequency != otiLocalDestinationOSTransponderInfo.iFrequency && otiLocalSourceOSTransponderInfo.iFrequency != otiLocalDestinationOSTransponderInfo.iFrequency + 1 && otiLocalSourceOSTransponderInfo.iFrequency != otiLocalDestinationOSTransponderInfo.iFrequency - 1)
+                return false;
+
+            return otiLocalSourceOSTransponderInfo.iPolarisation == otiLocalDestinationOSTransponderInfo.iPolarisation;
+        }
+    }
+}

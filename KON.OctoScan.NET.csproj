@@ -10,6 +10,14 @@
 	<RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
   <ItemGroup>
     <Content Remove="C:\Users\oliver.KON\.nuget\packages\languagetags\2.0.0\contentFiles\any\netstandard2.0\RegistryData\language-subtag-registry.txt" />
   </ItemGroup>
@@ -35,5 +43,12 @@
     <PackageReference Include="Pastel" Version="7.0.1" />
     <PackageReference Include="Polly" Version="8.7.0" />
   </ItemGroup>
+
+	<Target Name="PostBuildPublish" AfterTargets="PostBuildEvent" Condition="'$(PUBLISHING)' == ''">
+		<Message Importance="high" Text="====================================" />
+		<Message Importance="high" Text="Running publishing as PostBuildEvent" />
+		<Message Importance="high" Text="====================================" />
+		<Exec Command="if $(ConfigurationName) == Debug ( $(ProjectDir)Publish.Debug.bat ) else ( $(ProjectDir)Publish.Release.bat )" IgnoreExitCode="false" />
+	</Target>
 
 </Project>

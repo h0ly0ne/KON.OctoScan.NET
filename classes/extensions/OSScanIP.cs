@@ -1,312 +1,316 @@
 ﻿using System.Data;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 
 using NanoXLSX;
 using Pastel;
-using Polly;
 
 using static KON.OctoScan.NET.Constants;
 using static KON.OctoScan.NET.Global;
 
-namespace KON.OctoScan.NET
+namespace KON.OctoScan.NET;
+
+public static class OSScanIP_Extension
 {
-    public static class OSScanIP_Extension
+    private static readonly (string strName, Type tType, Func<OSTransponderInfo, OSService, object> fValue)[] taServiceColumns =
+    [
+        ("iFrequency", typeof(int), (otiCurrentOSTransponderInfo, _) => otiCurrentOSTransponderInfo.iFrequency),
+        ("strProviderName", typeof(string), (_, osCurrentOSService) => osCurrentOSService.strProviderName),
+        ("strName", typeof(string), (_, osCurrentOSService) => osCurrentOSService.strName),
+        ("iServiceID", typeof(int), (_, osCurrentOSService) => osCurrentOSService.iServiceID),
+        ("iConditionalAccessMode", typeof(int), (_, osCurrentOSService) => osCurrentOSService.iConditionalAccessMode),
+        ("iRunningStatus", typeof(int), (_, osCurrentOSService) => osCurrentOSService.iRunningStatus),
+        ("iTransportStreamID", typeof(int), (_, osCurrentOSService) => osCurrentOSService.iTransportStreamID),
+        ("iOriginalNetworkID", typeof(int), (_, osCurrentOSService) => osCurrentOSService.iOriginalNetworkID),
+        ("iProgramMapTable", typeof(int), (_, osCurrentOSService) => osCurrentOSService.iProgramMapTable),
+        ("iProgramClockReferencePacketIdentifier", typeof(int), (_, osCurrentOSService) => osCurrentOSService.iProgramClockReferencePacketIdentifier),
+        ("iVideoPacketIdentifier", typeof(int), (_, osCurrentOSService) => osCurrentOSService.iVideoPacketIdentifier),
+        ("byVideoPacketIdentifierStreamType", typeof(string), (_, osCurrentOSService) => osCurrentOSService.byVideoPacketIdentifierStreamType.ToString("X2")),
+        ("liAudioPacketIdentifiers", typeof(string), (_, osCurrentOSService) => osCurrentOSService.liAudioPacketIdentifiers.Count > 0 ? string.Join(",", osCurrentOSService.liAudioPacketIdentifiers) : "0"),
+        ("lbAudioPacketIdentifiersStreamType", typeof(string), (_, osCurrentOSService) => string.Join(",", osCurrentOSService.lbAudioPacketIdentifiersStreamType.Select(byCurrentStreamType => byCurrentStreamType.ToString("X2")))),
+        ("lsAudioPacketIdentifiersLanguage", typeof(string), (_, osCurrentOSService) => string.Join(",", osCurrentOSService.lsAudioPacketIdentifiersLanguage)),
+        ("iSubtitlePacketIdentifier", typeof(int), (_, osCurrentOSService) => osCurrentOSService.iSubtitlePacketIdentifier),
+        ("iTeletextPacketIdentifier", typeof(int), (_, osCurrentOSService) => osCurrentOSService.iTeletextPacketIdentifier)
+    ];
+
+    private static readonly (string strName, Type tType, Func<OSService, OSEvent, object> fValue)[] taEventColumns =
+    [
+        ("iOriginalNetworkID", typeof(int), (_, oeCurrentOSEvent) => oeCurrentOSEvent.iOriginalNetworkID),
+        ("iTransportStreamID", typeof(int), (_, oeCurrentOSEvent) => oeCurrentOSEvent.iTransportStreamID),
+        ("iServiceID", typeof(int), (_, oeCurrentOSEvent) => oeCurrentOSEvent.iServiceID),
+        ("strServiceName", typeof(string), (osCurrentOSService, _) => osCurrentOSService.strName),
+        ("iEventID", typeof(int), (_, oeCurrentOSEvent) => oeCurrentOSEvent.iEventID),
+        ("strStartTime", typeof(string), (_, oeCurrentOSEvent) => oeCurrentOSEvent.GetStartTime()),
+        ("strDuration", typeof(string), (_, oeCurrentOSEvent) => oeCurrentOSEvent.GetDuration()),
+        ("strLanguage", typeof(string), (_, oeCurrentOSEvent) => oeCurrentOSEvent.strLanguage ?? string.Empty),
+        ("strName", typeof(string), (_, oeCurrentOSEvent) => oeCurrentOSEvent.strName ?? string.Empty),
+        ("strText", typeof(string), (_, oeCurrentOSEvent) => oeCurrentOSEvent.strText ?? string.Empty)
+    ];
+
+    extension(OSScanIP osiLocalOSScanIP)
     {
-        extension(OSScanIP osiLocalOSScanIP)
+        /// <summary>
+        /// OSScanIP.AddTransponderInfo()
+        /// </summary>
+        /// <param name="otiLocalOSTransponderInfo"></param>
+        /// <returns>bool</returns>
+        public bool AddTransponderInfo(OSTransponderInfo otiLocalOSTransponderInfo)
         {
-            public bool AddTransponderInfo(OSTransponderInfo otiLocalOSTransponderInfo)
+            LogTrace("OSScanIP.AddTransponderInfo()");
+
+            if (osiLocalOSScanIP.olotiOSListOSTransponderInfo == null || osiLocalOSScanIP.olotiOSListOSTransponderInfoDone == null)
+                return false;
+
+            if (osiLocalOSScanIP.olotiOSListOSTransponderInfo.Concat(osiLocalOSScanIP.olotiOSListOSTransponderInfoDone).Any(otiCurrentOSTransponderInfo => CompareTransponderInfo(otiCurrentOSTransponderInfo, otiLocalOSTransponderInfo)))
+                return false;
+
+            otiLocalOSTransponderInfo.olosOSListOSService.Initialize();
+            osiLocalOSScanIP.olotiOSListOSTransponderInfo.AddLast(otiLocalOSTransponderInfo);
+
+            return true;
+        }
+
+        /// <summary>
+        /// OSScanIP.Scan()
+        /// </summary>
+        /// <param name="iLocalScanRetries"></param>
+        /// <param name="iLocalTunerLockGraceTime"></param>
+        /// <param name="iLocalServerPort"></param>
+        /// <returns>bool</returns>
+        public bool Scan(int? iLocalScanRetries, int? iLocalTunerLockGraceTime, int iLocalServerPort = 554)
+        {
+            LogTrace("OSScanIP.Scan()");
+
+            var ostCurrentOSScanTransponder = osiLocalOSScanIP.ostOSScanTransponder;
+            var otsiCurrentOSTransportStreamInfo = ostCurrentOSScanTransponder?.otsiOSTransportStreamInfo;
+            var osicCurrentOSSatIPConnection = ostCurrentOSScanTransponder?.osicOSSatIPConnection;
+
+            if (ostCurrentOSScanTransponder == null || otsiCurrentOSTransportStreamInfo == null || osicCurrentOSSatIPConnection == null || osiLocalOSScanIP.olotiOSListOSTransponderInfo == null)
+                return false;
+
+            ostCurrentOSScanTransponder.osiOSScanIP = osiLocalOSScanIP;
+            otsiCurrentOSTransportStreamInfo.ostOSScanTransponder = ostCurrentOSScanTransponder;
+            osicCurrentOSSatIPConnection.iPort = iLocalServerPort;
+            osicCurrentOSSatIPConnection.strHost = osiLocalOSScanIP.strHost;
+
+            try
             {
-                lCurrentLogger.Trace("OSScanIP.AddTransponderInfo()".Pastel(ConsoleColor.Cyan));
-
-                if (osiLocalOSScanIP.olotiOSListOSTransponderInfo == null)
-                    return false;
-
-                if (osiLocalOSScanIP.olotiOSListOSTransponderInfoDone == null)
-                    return false;
-
-                if (osiLocalOSScanIP.olotiOSListOSTransponderInfo.Any(otiCurrentOSTransponderInfo => CompareTransponderInfo(otiCurrentOSTransponderInfo, otiLocalOSTransponderInfo)))
-                    return false;
-
-                if (osiLocalOSScanIP.olotiOSListOSTransponderInfoDone.Any(otiCurrentOSTransponderInfo => CompareTransponderInfo(otiCurrentOSTransponderInfo, otiLocalOSTransponderInfo)))
-                    return false;
-
-                otiLocalOSTransponderInfo.olosOSListOSService.Initialize();
-                osiLocalOSScanIP.olotiOSListOSTransponderInfo.AddLast(otiLocalOSTransponderInfo);
-
-                return true;
-            }
-
-            public bool Scan(int? iLocalScanRetries, int? iLocalTransponderRetries, int iLocalServerPort = 554)
-            {
-                lCurrentLogger.Trace("OSScanIP.Scan()".Pastel(ConsoleColor.Cyan));
-
-                while (!bDone && osiLocalOSScanIP is { olotiOSListOSTransponderInfo: not null } && !osiLocalOSScanIP.olotiOSListOSTransponderInfo.IsEmpty())
+                while (!bDone && osiLocalOSScanIP.olotiOSListOSTransponderInfo.First?.Value is { } otiCurrentOSTransponderInfo)
                 {
-                    var ostCurrentOSScanTransponder = osiLocalOSScanIP.ostOSScanTransponder;
-                    var otsiCurrentOSTransportStreamInfo = ostCurrentOSScanTransponder?.otsiOSTransportStreamInfo;
-
-                    otsiCurrentOSTransportStreamInfo?.Init();
-
-                    if (ostCurrentOSScanTransponder == null)
-                        return false;
-
-                    ostCurrentOSScanTransponder.osiOSScanIP = osiLocalOSScanIP;
-
-                    if (ostCurrentOSScanTransponder.osicOSSatIPConnection == null)
-                        return false;
-
-                    ostCurrentOSScanTransponder.osicOSSatIPConnection.iPort = iLocalServerPort;
-                    ostCurrentOSScanTransponder.osicOSSatIPConnection.strHost = osiLocalOSScanIP.strHost;
-
-                    if (otsiCurrentOSTransportStreamInfo == null)
-                        return false;
-
-                    otsiCurrentOSTransportStreamInfo.ostOSScanTransponder = ostCurrentOSScanTransponder;
-                    var otiCurrentOSTransponderInfo = osiLocalOSScanIP.olotiOSListOSTransponderInfo.First();
-                    ostCurrentOSScanTransponder.osicOSSatIPConnection.strTune = otiCurrentOSTransponderInfo?.ToString();
-
-                    lCurrentLogger.Info($"TUNE {ostCurrentOSScanTransponder.osicOSSatIPConnection.strTune}".Pastel(ConsoleColor.Magenta));
-
+                    osicCurrentOSSatIPConnection.strTune = otiCurrentOSTransponderInfo.ToString();
                     ostCurrentOSScanTransponder.otiOSTransponderInfo = otiCurrentOSTransponderInfo;
-                    var iStartTime = CurrentTimestamp();
 
-                    var cCurrentChildContext = new Context { { "Retries", 0 } };
-                    Policy.HandleResult<bool>(r => !r).WaitAndRetry(iLocalScanRetries ?? 3, _ => TimeSpan.FromSeconds(1), onRetry: (_, _, retryCount, context) => { context["Retries"] = retryCount; }).Execute(delegate { ostCurrentOSScanTransponder.Scan(iLocalTransponderRetries: iLocalTransponderRetries ?? 10); return ostCurrentOSScanTransponder is { bFailed: false, bTimeout: false }; }, cCurrentChildContext);
-                    osiLocalOSScanIP.lRetries = Convert.ToInt32(cCurrentChildContext["Retries"]);
+                    lCurrentLogger.Info($"TUNE {osicCurrentOSSatIPConnection.strTune}".Pastel(ConsoleColor.Magenta));
 
-                    var iEndTime = CurrentTimestamp();
+                    var lStartTime = CurrentTimestamp();
+
+                    Retry(iLocalScanRetries ?? 3, delegate
+                    {
+                        otsiCurrentOSTransportStreamInfo.Init();
+
+                        if (!ostCurrentOSScanTransponder.Scan(iLocalTunerLockGraceTime ?? TUNER_LOCK_GRACE_TIME))
+                            ostCurrentOSScanTransponder.bFailed = true;
+
+                        return ostCurrentOSScanTransponder is { bFailed: false, bTimeout: false } or { bFailed: false, bNoSignal: true } or { bPermanentError: true };
+                    }, out var iCurrentRetries);
+
+                    osiLocalOSScanIP.lRetries = iCurrentRetries;
+                    var lEndTime = CurrentTimestamp();
                     otsiCurrentOSTransportStreamInfo.Dispose();
-
-                    osiLocalOSScanIP.olotiOSListOSTransponderInfo?.Remove(otiCurrentOSTransponderInfo);
+                    
+                    osiLocalOSScanIP.olotiOSListOSTransponderInfo.Remove(otiCurrentOSTransponderInfo);
                     osiLocalOSScanIP.olotiOSListOSTransponderInfoDone?.AddLast(otiCurrentOSTransponderInfo);
 
-                    lCurrentLogger.Info($"OPERATION(S) {(ostCurrentOSScanTransponder.bFailed ? "FAILED" : (ostCurrentOSScanTransponder.bTimeout ? "TIMEOUT" : "FINISHED (" + otiCurrentOSTransponderInfo?.olosOSListOSService.Count + " SERVICES FOUND)"))} (AND TOOK {iEndTime - iStartTime} SECOND(S) - TRANSPONDER: {ostCurrentOSScanTransponder.lRetries} + SCAN: {osiLocalOSScanIP.lRetries} RETRY)".Pastel(ostCurrentOSScanTransponder.bFailed ? ConsoleColor.Red : (ostCurrentOSScanTransponder.bTimeout ? ConsoleColor.Yellow : ConsoleColor.Green)));
+                    var strCurrentResult = ostCurrentOSScanTransponder switch
+                    {
+                        { bFailed: true } => ostCurrentOSScanTransponder.strFailReason != null ? $"FAILED ({ostCurrentOSScanTransponder.strFailReason})" : "FAILED",
+                        { bNoSignal: true } => $"NO SIGNAL (LEVEL {ostCurrentOSScanTransponder.iTunerLevel} QUALITY {ostCurrentOSScanTransponder.iTunerQuality})",
+                        { bTimeout: true } => "TIMEOUT",
+                        _ => $"FINISHED ({otiCurrentOSTransponderInfo.olosOSListOSService.Count} SERVICES FOUND)"
+                    };
+                    var ccCurrentResultColor = ostCurrentOSScanTransponder.bFailed ? ConsoleColor.Red : ostCurrentOSScanTransponder.bNoSignal || ostCurrentOSScanTransponder.bTimeout ? ConsoleColor.Yellow : ConsoleColor.Green;
+
+                    lCurrentLogger.Info($"OPERATION(S) {strCurrentResult} (AND TOOK {lEndTime - lStartTime} SECOND(S) - RETRIES: {osiLocalOSScanIP.lRetries})".Pastel(ccCurrentResultColor));
                 }
-
-                return true;
             }
-
-            public void ExportEventsToExcel()
+            finally
             {
-                lCurrentLogger.Trace("OSScanIP.ExportEventsToExcel()".Pastel(ConsoleColor.Cyan));
-
-                //TODO - Implementation missing
+                ostCurrentOSScanTransponder.CloseSession();
             }
 
-            /// <summary>
-            /// OSScanIP.ExportServicesToExcel()
-            /// </summary>
-            /// <param name="strLocalFilename"></param>
-            public void ExportServicesToExcel(string strLocalFilename = "ExportServices")
-            {
-                lCurrentLogger.Trace("OSScanIP.ExportServicesToExcel()".Pastel(ConsoleColor.Cyan));
-
-                var strCurrentFilename = DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_" + strLocalFilename + ".xlsx";
-                var wbCurrentWorkbook = new Workbook(strCurrentFilename, strLocalFilename);
-                var wsCurrentWorksheet = wbCurrentWorkbook.GetWorksheet(strLocalFilename);
-
-                wbCurrentWorkbook.SetCurrentWorksheet(wsCurrentWorksheet);
-                wsCurrentWorksheet.SetCurrentRowNumber(0);
-
-                if (osiLocalOSScanIP.olotiOSListOSTransponderInfoDone is { Count: > 0 })
-                {
-                    foreach (var fiCurrentOSTransponderInfoHeaderFieldInfo in typeof(OSTransponderInfo).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name == "iFrequency"))
-                    {
-                        wsCurrentWorksheet.AddNextCell(fiCurrentOSTransponderInfoHeaderFieldInfo.Name);
-                    }
-
-                    foreach (var fiCurrentOSServiceHeaderFieldInfo in typeof(OSService).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name != "oloeOSListOSEvent" && fiCurrentFieldInfo.Name != "byAudioChannels" && fiCurrentFieldInfo.Name != "bGotFromProgramMapTable" && fiCurrentFieldInfo.Name != "bGotFromServiceDescriptorTable" && fiCurrentFieldInfo.Name != "iEventInformationTablePresentFollowing" && fiCurrentFieldInfo.Name != "iEventInformationTableSchedule"))
-                    {
-                        wsCurrentWorksheet.AddNextCell(fiCurrentOSServiceHeaderFieldInfo.Name);
-                    }
-
-                    var fCorrectionFactorForColumnFilter = 3 * EXCEL_CHARACTER_TO_WIDTH_CONSTANT;
-                    float fProviderNamePropertyMaximumLength = 0;
-                    float fNamePropertyMaximumLength = 0;
-
-                    foreach (var otiCurrentOSTransponderInfo in osiLocalOSScanIP.olotiOSListOSTransponderInfoDone)
-                    {
-                        foreach (var osCurrentOSServiceItem in otiCurrentOSTransponderInfo?.olosOSListOSService!)
-                        {
-                            wsCurrentWorksheet.GoToNextRow();
-
-                            foreach (var fiCurrentOSTransponderInfoHeaderFieldInfo in typeof(OSTransponderInfo).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name == "iFrequency"))
-                            {
-                                wsCurrentWorksheet.AddNextCell(fiCurrentOSTransponderInfoHeaderFieldInfo.GetValue(otiCurrentOSTransponderInfo));
-                            }
-
-                            foreach (var fiCurrentOSServiceItemFieldInfo in typeof(OSService).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name != "oloeOSListOSEvent" && fiCurrentFieldInfo.Name != "byAudioChannels" && fiCurrentFieldInfo.Name != "bGotFromProgramMapTable" && fiCurrentFieldInfo.Name != "bGotFromServiceDescriptorTable" && fiCurrentFieldInfo.Name != "iEventInformationTablePresentFollowing" && fiCurrentFieldInfo.Name != "iEventInformationTableSchedule"))
-                            {
-                                if (fiCurrentOSServiceItemFieldInfo.Name is not "iaAudioPacketIdentifiers")
-                                {
-                                    wsCurrentWorksheet.AddNextCell(fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem));
-                                }
-                                else
-                                {
-                                    if ((byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0) > 0 && ((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0] != 0)
-                                    {
-                                        var strCurrentAPIDs = Convert.ToString(((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[0]);
-
-                                        for (var iCurrentAPIDCounter = 1; iCurrentAPIDCounter < (byte)(typeof(OSService).GetField("byAudioChannels")?.GetValue(osCurrentOSServiceItem) ?? 0); iCurrentAPIDCounter += 1)
-                                        {
-                                            if (((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDCounter] != 0)
-                                                strCurrentAPIDs += "," + Convert.ToString(((int[])fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem)!)[iCurrentAPIDCounter]);
-                                        }
-
-                                        wsCurrentWorksheet.AddNextCell(strCurrentAPIDs);
-                                    }
-                                    else
-                                        wsCurrentWorksheet.AddNextCell(string.Empty);
-                                }
-                            }
-                        }
-
-                        var fProviderNamePropertyMaximumLengthCurrent = otiCurrentOSTransponderInfo.olosOSListOSService.Select(osCurrentOSServiceItem => osCurrentOSServiceItem.strProviderName.Length).Prepend(0).Max() * EXCEL_CHARACTER_TO_WIDTH_CONSTANT + fCorrectionFactorForColumnFilter;
-                        if (fProviderNamePropertyMaximumLengthCurrent > fProviderNamePropertyMaximumLength)
-                            fProviderNamePropertyMaximumLength = fProviderNamePropertyMaximumLengthCurrent;
-                        var fNamePropertyMaximumLengthCurrent = otiCurrentOSTransponderInfo.olosOSListOSService.Select(osCurrentOSServiceItem => osCurrentOSServiceItem.strName.Length).Prepend(0).Max() * EXCEL_CHARACTER_TO_WIDTH_CONSTANT + fCorrectionFactorForColumnFilter;
-                        if (fNamePropertyMaximumLengthCurrent > fNamePropertyMaximumLength)
-                            fNamePropertyMaximumLength = fNamePropertyMaximumLengthCurrent;
-                    }
-
-                    for (var iCurrentColumnNumber = 0; iCurrentColumnNumber <= wsCurrentWorksheet.GetLastColumnNumber(); iCurrentColumnNumber++)
-                    {
-                        var fCurrentMaximumLengthValuesWithHeader = Convert.ToSingle(Convert.ToString(wsCurrentWorksheet.GetCell(iCurrentColumnNumber, 0).Value)!.Length) * EXCEL_CHARACTER_TO_WIDTH_CONSTANT + fCorrectionFactorForColumnFilter;
-
-                        switch (iCurrentColumnNumber)
-                        {
-                            case 1:
-                            {
-                                if (fCurrentMaximumLengthValuesWithHeader < fProviderNamePropertyMaximumLength)
-                                    fCurrentMaximumLengthValuesWithHeader = fProviderNamePropertyMaximumLength;
-                                break;
-                            }
-                            case 2:
-                            {
-                                if (fCurrentMaximumLengthValuesWithHeader < fNamePropertyMaximumLength)
-                                    fCurrentMaximumLengthValuesWithHeader = fNamePropertyMaximumLength;
-                                break;
-                            }
-                        }
-
-                        wsCurrentWorksheet.SetColumnWidth(iCurrentColumnNumber, fCurrentMaximumLengthValuesWithHeader);
-                    }
-                }
-
-                wsCurrentWorksheet.SetAutoFilter(0, wsCurrentWorksheet.GetLastColumnNumber());
-                wbCurrentWorkbook.Save();
-            }
-
-            /// <summary>
-            /// OSScanIP.ExportServicesToDataTable()
-            /// </summary>
-            /// <param name="strLocalDataTableName"></param>
-            /// <returns></returns>
-            public DataTable ExportServicesToDataTable(string strLocalDataTableName = "ExportServices")
-            {
-                lCurrentLogger.Trace("OSScanIP.ExportServicesToDataTable()".Pastel(ConsoleColor.Cyan));
-
-                DataTable dtLocalDataTable = new() { TableName = strLocalDataTableName };
-
-                if (osiLocalOSScanIP.olotiOSListOSTransponderInfoDone is not { Count: > 0 })
-                    return dtLocalDataTable;
-
-                foreach (var fiCurrentOSTransponderInfoHeaderFieldInfo in typeof(OSTransponderInfo).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name == "iFrequency"))
-                {
-                    dtLocalDataTable.Columns.Add(fiCurrentOSTransponderInfoHeaderFieldInfo.Name);
-                }
-
-                foreach (var fiCurrentOSServiceHeaderFieldInfo in typeof(OSService).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name != "oloeOSListOSEvent" && fiCurrentFieldInfo.Name != "byAudioChannels" && fiCurrentFieldInfo.Name != "bGotFromProgramMapTable" && fiCurrentFieldInfo.Name != "bGotFromServiceDescriptorTable" && fiCurrentFieldInfo.Name != "iEventInformationTablePresentFollowing" && fiCurrentFieldInfo.Name != "iEventInformationTableSchedule"))
-                {
-                    dtLocalDataTable.Columns.Add(fiCurrentOSServiceHeaderFieldInfo.Name);
-                }
-
-                foreach (var otiCurrentOSTransponderInfo in osiLocalOSScanIP.olotiOSListOSTransponderInfoDone)
-                {
-                    foreach (var osCurrentOSServiceItem in otiCurrentOSTransponderInfo?.olosOSListOSService!)
-                    {
-                        var drLocalDataRow = dtLocalDataTable.NewRow();
-
-                        foreach (var fiCurrentOSTransponderInfoHeaderFieldInfo in typeof(OSTransponderInfo).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name == "iFrequency"))
-                        {
-                            drLocalDataRow[fiCurrentOSTransponderInfoHeaderFieldInfo.Name] = fiCurrentOSTransponderInfoHeaderFieldInfo.GetValue(otiCurrentOSTransponderInfo);
-                        }
-
-                        foreach (var fiCurrentOSServiceItemFieldInfo in typeof(OSService).GetFields().Where(fiCurrentFieldInfo => fiCurrentFieldInfo.Name != "oloeOSListOSEvent" && fiCurrentFieldInfo.Name != "byAudioChannels" && fiCurrentFieldInfo.Name != "bGotFromProgramMapTable" && fiCurrentFieldInfo.Name != "bGotFromServiceDescriptorTable" && fiCurrentFieldInfo.Name != "iEventInformationTablePresentFollowing" && fiCurrentFieldInfo.Name != "iEventInformationTableSchedule"))
-                        {
-                            if (fiCurrentOSServiceItemFieldInfo.Name is not "byVideoPacketIdentifierStreamType" and not "liAudioPacketIdentifiers" and not "lbAudioPacketIdentifiersStreamType" and not "lsAudioPacketIdentifiersLanguage")
-                                drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem);
-                            else
-                            {
-                                switch (fiCurrentOSServiceItemFieldInfo.Name)
-                                {
-                                    case "byVideoPacketIdentifierStreamType":
-                                    {
-                                        drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = GetBytesAsInt32([(byte)(fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem) ?? 0)], false, 0, 8).ToString("X2");
-
-                                        break;
-                                    }
-                                    case "liAudioPacketIdentifiers":
-                                    {
-                                        if (fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem) is List<int> { Count: > 0 } liCurrentAudioPIDs)
-                                            drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = string.Join(",", liCurrentAudioPIDs);
-                                        else
-                                            drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = "0";
-
-                                        break;
-                                    }
-                                    case "lbAudioPacketIdentifiersStreamType":
-                                    {
-                                        var lbCurrentAudioPIDStreamTypes = fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem) as List<byte>;
-                                        var iCurrentAudioChannels = ((typeof(OSService).GetField("liAudioPacketIdentifiers")?.GetValue(osCurrentOSServiceItem) ?? 0) as List<int>)?.Count ?? 0;
-
-                                        if (lbCurrentAudioPIDStreamTypes is { Count: > 0 } && iCurrentAudioChannels > 0)
-                                            drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = string.Join(",", lbCurrentAudioPIDStreamTypes.Take(iCurrentAudioChannels).Select(bCurrentPIDStreamType => bCurrentPIDStreamType.ToString("X2")));
-                                        else
-                                            drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = string.Empty;
-
-                                        break;
-                                    }
-                                    case "lsAudioPacketIdentifiersLanguage":
-                                    {
-                                        var lsCurrentAudioPIDLanguages = fiCurrentOSServiceItemFieldInfo.GetValue(osCurrentOSServiceItem) as List<string>;
-                                        var iCurrentAudioChannels = ((typeof(OSService).GetField("liAudioPacketIdentifiers")?.GetValue(osCurrentOSServiceItem) ?? 0) as List<int>)?.Count ?? 0;
-
-                                        if (lsCurrentAudioPIDLanguages is { Count: > 0 } && iCurrentAudioChannels > 0)
-                                            drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = string.Join(",", lsCurrentAudioPIDLanguages.Take(iCurrentAudioChannels));
-                                        else
-                                            drLocalDataRow[fiCurrentOSServiceItemFieldInfo.Name] = string.Empty;
-
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-
-                        dtLocalDataTable.Rows.Add(drLocalDataRow);
-                    }
-                }
-
-                return dtLocalDataTable;
-            }
+            return true;
         }
 
-        public static bool CompareTransponderInfo(OSTransponderInfo? otiLocalSourceOSTransponderInfo, OSTransponderInfo? otiLocalDestinationOSTransponderInfo)
+        /// <summary>
+        /// OSScanIP.ExportServicesToDataTable()
+        /// </summary>
+        /// <param name="strLocalDataTableName"></param>
+        /// <returns>DataTable</returns>
+        public DataTable ExportServicesToDataTable(string strLocalDataTableName = "ExportServices")
         {
-            lCurrentLogger.Trace("OSScanIP.CompareTransponderInfo()".Pastel(ConsoleColor.Cyan));
+            LogTrace("OSScanIP.ExportServicesToDataTable()");
 
-            if (otiLocalSourceOSTransponderInfo == null || otiLocalDestinationOSTransponderInfo == null)
-                return false;
+            var dtCurrentDataTable = new DataTable { TableName = strLocalDataTableName };
 
-            if (otiLocalSourceOSTransponderInfo.iModulationSystem != otiLocalDestinationOSTransponderInfo.iModulationSystem)
-                return false;
+            foreach (var tCurrentColumn in taServiceColumns)
+                dtCurrentDataTable.Columns.Add(tCurrentColumn.strName, tCurrentColumn.tType);
 
-            if (otiLocalSourceOSTransponderInfo.iSource != otiLocalDestinationOSTransponderInfo.iSource)
-                return false;
+            foreach (var otiCurrentOSTransponderInfo in osiLocalOSScanIP.olotiOSListOSTransponderInfoDone?.OfType<OSTransponderInfo>() ?? [])
+            {
+                foreach (var osCurrentOSService in otiCurrentOSTransponderInfo.olosOSListOSService)
+                    dtCurrentDataTable.Rows.Add(taServiceColumns.Select(tCurrentColumn => tCurrentColumn.fValue(otiCurrentOSTransponderInfo, osCurrentOSService)).ToArray());
+            }
 
-            if (otiLocalSourceOSTransponderInfo.iFrequency != otiLocalDestinationOSTransponderInfo.iFrequency && otiLocalSourceOSTransponderInfo.iFrequency != otiLocalDestinationOSTransponderInfo.iFrequency + 1 && otiLocalSourceOSTransponderInfo.iFrequency != otiLocalDestinationOSTransponderInfo.iFrequency - 1)
-                return false;
-
-            return otiLocalSourceOSTransponderInfo.iPolarisation == otiLocalDestinationOSTransponderInfo.iPolarisation;
+            return dtCurrentDataTable;
         }
+
+        /// <summary>
+        /// OSScanIP.ExportEventsToDataTable()
+        /// </summary>
+        /// <param name="strLocalDataTableName"></param>
+        /// <returns>DataTable</returns>
+        public DataTable ExportEventsToDataTable(string strLocalDataTableName = "ExportEvents")
+        {
+            LogTrace("OSScanIP.ExportEventsToDataTable()");
+
+            var dtCurrentDataTable = new DataTable { TableName = strLocalDataTableName };
+
+            foreach (var tCurrentColumn in taEventColumns)
+                dtCurrentDataTable.Columns.Add(tCurrentColumn.strName, tCurrentColumn.tType);
+
+            foreach (var osCurrentOSService in osiLocalOSScanIP.olotiOSListOSTransponderInfoDone?.OfType<OSTransponderInfo>().SelectMany(otiCurrentOSTransponderInfo => otiCurrentOSTransponderInfo.olosOSListOSService) ?? [])
+            {
+                foreach (var oeCurrentOSEvent in osCurrentOSService.oloeOSListOSEvent)
+                    dtCurrentDataTable.Rows.Add(taEventColumns.Select(tCurrentColumn => tCurrentColumn.fValue(osCurrentOSService, oeCurrentOSEvent)).ToArray());
+            }
+
+            return dtCurrentDataTable;
+        }
+
+        /// <summary>
+        /// OSScanIP.ExportServicesToJson()
+        /// </summary>
+        public void ExportServicesToJson()
+        {
+            LogTrace("OSScanIP.ExportServicesToJson()");
+
+            WriteDataTableToJson(osiLocalOSScanIP.ExportServicesToDataTable());
+        }
+
+        /// <summary>
+        /// OSScanIP.ExportEventsToJson()
+        /// </summary>
+        public void ExportEventsToJson()
+        {
+            LogTrace("OSScanIP.ExportEventsToJson()");
+
+            WriteDataTableToJson(osiLocalOSScanIP.ExportEventsToDataTable());
+        }
+
+        /// <summary>
+        /// OSScanIP.ExportServicesToExcel()
+        /// </summary>
+        public void ExportServicesToExcel()
+        {
+            LogTrace("OSScanIP.ExportServicesToExcel()");
+
+            WriteDataTableToExcel(osiLocalOSScanIP.ExportServicesToDataTable());
+        }
+
+        /// <summary>
+        /// OSScanIP.ExportEventsToExcel()
+        /// </summary>
+        public void ExportEventsToExcel()
+        {
+            LogTrace("OSScanIP.ExportEventsToExcel()");
+
+            WriteDataTableToExcel(osiLocalOSScanIP.ExportEventsToDataTable());
+        }
+    }
+
+    /// <summary>
+    /// OSScanIP.GetExportFilename()
+    /// </summary>
+    /// <param name="strLocalName"></param>
+    /// <param name="strLocalExtension"></param>
+    /// <returns>string</returns>
+    private static string GetExportFilename(string strLocalName, string strLocalExtension)
+    {
+        LogTrace("OSScanIP.GetExportFilename()");
+
+        return $"{DateTime.Now:yyyyMMddHHmmssfff}_{strLocalName}.{strLocalExtension}";
+    }
+
+    /// <summary>
+    /// OSScanIP.WriteDataTableToJson()
+    /// </summary>
+    /// <param name="dtLocalDataTable"></param>
+    private static void WriteDataTableToJson(DataTable dtLocalDataTable)
+    {
+        LogTrace("OSScanIP.WriteDataTableToJson()");
+
+        var strCurrentFilename = GetExportFilename(dtLocalDataTable.TableName, "json");
+        var ldsoCurrentRows = dtLocalDataTable.Rows.Cast<DataRow>().Select(drCurrentRow => dtLocalDataTable.Columns.Cast<DataColumn>().ToDictionary(dcCurrentColumn => dcCurrentColumn.ColumnName, dcCurrentColumn => drCurrentRow[dcCurrentColumn])).ToList();
+
+        File.WriteAllText(strCurrentFilename, JsonSerializer.Serialize(ldsoCurrentRows, new JsonSerializerOptions { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+        lCurrentLogger.Info($"EXPORT {strCurrentFilename} ({ldsoCurrentRows.Count} ROWS)".Pastel(ConsoleColor.Cyan));
+    }
+
+    /// <summary>
+    /// OSScanIP.WriteDataTableToExcel()
+    /// </summary>
+    /// <param name="dtLocalDataTable"></param>
+    private static void WriteDataTableToExcel(DataTable dtLocalDataTable)
+    {
+        LogTrace("OSScanIP.WriteDataTableToExcel()");
+
+        var strCurrentFilename = GetExportFilename(dtLocalDataTable.TableName, "xlsx");
+        var wbCurrentWorkbook = new Workbook(strCurrentFilename, dtLocalDataTable.TableName);
+        var wsCurrentWorksheet = wbCurrentWorkbook.GetWorksheet(dtLocalDataTable.TableName);
+        var fCorrectionFactorForColumnFilter = 3 * EXCEL_CHARACTER_TO_WIDTH_CONSTANT;
+
+        wbCurrentWorkbook.SetCurrentWorksheet(wsCurrentWorksheet);
+        wsCurrentWorksheet.SetCurrentRowNumber(0);
+
+        foreach (DataColumn dcCurrentColumn in dtLocalDataTable.Columns)
+            wsCurrentWorksheet.AddNextCell(dcCurrentColumn.ColumnName);
+
+        foreach (DataRow drCurrentRow in dtLocalDataTable.Rows)
+        {
+            wsCurrentWorksheet.GoToNextRow();
+
+            foreach (var oCurrentValue in drCurrentRow.ItemArray)
+                wsCurrentWorksheet.AddNextCell(oCurrentValue);
+        }
+
+        for (var iCurrentColumnNumber = 0; iCurrentColumnNumber < dtLocalDataTable.Columns.Count; iCurrentColumnNumber++)
+        {
+            var iCurrentMaximumLength = dtLocalDataTable.Rows.Cast<DataRow>().Select(drCurrentRow => Convert.ToString(drCurrentRow[iCurrentColumnNumber])?.Length ?? 0).Prepend(dtLocalDataTable.Columns[iCurrentColumnNumber].ColumnName.Length).Max();
+            wsCurrentWorksheet.SetColumnWidth(iCurrentColumnNumber, Math.Min(iCurrentMaximumLength * EXCEL_CHARACTER_TO_WIDTH_CONSTANT + fCorrectionFactorForColumnFilter, EXCEL_MAXIMUM_COLUMN_WIDTH));
+        }
+
+        wsCurrentWorksheet.SetAutoFilter(0, dtLocalDataTable.Columns.Count - 1);
+        wbCurrentWorkbook.Save();
+
+        lCurrentLogger.Info($"EXPORT {strCurrentFilename} ({dtLocalDataTable.Rows.Count} ROWS)".Pastel(ConsoleColor.Cyan));
+    }
+
+    /// <summary>
+    /// OSScanIP.CompareTransponderInfo()
+    /// </summary>
+    /// <param name="otiLocalSourceOSTransponderInfo"></param>
+    /// <param name="otiLocalDestinationOSTransponderInfo"></param>
+    /// <returns></returns>
+    public static bool CompareTransponderInfo(OSTransponderInfo? otiLocalSourceOSTransponderInfo, OSTransponderInfo? otiLocalDestinationOSTransponderInfo)
+    {
+        LogTrace("OSScanIP.CompareTransponderInfo()");
+
+        if (otiLocalSourceOSTransponderInfo == null || otiLocalDestinationOSTransponderInfo == null)
+            return false;
+
+        return otiLocalSourceOSTransponderInfo.iModulationSystem == otiLocalDestinationOSTransponderInfo.iModulationSystem
+               && otiLocalSourceOSTransponderInfo.iSource == otiLocalDestinationOSTransponderInfo.iSource
+               && Math.Abs(otiLocalSourceOSTransponderInfo.iFrequency - otiLocalDestinationOSTransponderInfo.iFrequency) <= 1
+               && otiLocalSourceOSTransponderInfo.iPolarisation == otiLocalDestinationOSTransponderInfo.iPolarisation;
     }
 }

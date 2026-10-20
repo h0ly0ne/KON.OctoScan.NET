@@ -1,50 +1,56 @@
-﻿using Pastel;
+﻿using static KON.OctoScan.NET.Global;
 
-using static KON.OctoScan.NET.Global;
+namespace KON.OctoScan.NET;
 
-namespace KON.OctoScan.NET
+public class OSPacketIdentifierInfo : IDisposable
 {
-    public class OSPacketIdentifierInfo : IDisposable
+    public OSTransportStreamInfo? otsiOSTransportStreamInfo;
+    public OSList<OSTransportStreamFilter>? olotsfOSListOSTransportStreamFilter;
+
+    public int iPacketID;
+    public int iUseTableExtension;
+    public bool bUsed;
+    public byte byContinuityCounter;
+    public int iBufferPointer;
+    public int iBufferLength;
+    public byte[]? byaBuffer;
+    public bool bHasContinuityErrors;
+
+    /// <summary>
+    /// OSPacketIdentifierInfo.Init()
+    /// </summary>
+    /// <param name="iLocalPID"></param>
+    /// <param name="tsiLocalTSInfo"></param>
+    public void Init(int iLocalPID, OSTransportStreamInfo? tsiLocalTSInfo)
     {
-        public OSTransportStreamInfo? otsiOSTransportStreamInfo;
-        public OSList<OSTransportStreamFilter>? olotsfOSListOSTransportStreamFilter;
+        LogTrace("OSPacketIdentifierInfo.Init()");
+        
+        olotsfOSListOSTransportStreamFilter = [];
+        iPacketID = iLocalPID;
+        otsiOSTransportStreamInfo = tsiLocalTSInfo;
+        bHasContinuityErrors = false;
+    }
 
-        public int iPacketID;
-        public int iUseTableExtension;
-        public bool bUsed;
-        public byte byContinuityCounter;
-        public int iBufferPointer;
-        public int iBufferLength;
-        public byte[]? byaBuffer;
-        public bool bHasContinuityErrors;
+    /// <summary>
+    /// OSPacketIdentifierInfo.Dispose()
+    /// </summary>
+    public void Dispose()
+    {
+        LogTrace("OSPacketIdentifierInfo.Dispose()");
+        
+        olotsfOSListOSTransportStreamFilter?.Clear();
+        iPacketID = 0;
+        otsiOSTransportStreamInfo = null;
+        byaBuffer = null;
+    }
 
-        public void Init(int iLocalPID, OSTransportStreamInfo? tsiLocalTSInfo)
-        {
-            lCurrentLogger.Trace("OSPacketIdentifierInfo.Init()".Pastel(ConsoleColor.Cyan));
-
-            olotsfOSListOSTransportStreamFilter = [];
-            olotsfOSListOSTransportStreamFilter?.Initialize();
-
-            iPacketID = iLocalPID;
-            otsiOSTransportStreamInfo = tsiLocalTSInfo;
-            bHasContinuityErrors = false;
-        }
-
-        public void Dispose()
-        {
-            lCurrentLogger.Trace("OSPacketIdentifierInfo.Dispose()".Pastel(ConsoleColor.Cyan));
-
-            olotsfOSListOSTransportStreamFilter?.Clear();
-
-            iPacketID = 0;
-            otsiOSTransportStreamInfo = null;
-        }
-
-        public void Reset()
-        {
-            lCurrentLogger.Trace("OSPacketIdentifierInfo.Reset()".Pastel(ConsoleColor.Cyan));
-
-            iBufferPointer = iBufferLength = 0;
-        }
+    /// <summary>
+    /// OSPacketIdentifierInfo.Reset()
+    /// </summary>
+    public void Reset()
+    {
+        LogTrace("OSPacketIdentifierInfo.Reset()");
+        
+        iBufferPointer = iBufferLength = 0;
     }
 }

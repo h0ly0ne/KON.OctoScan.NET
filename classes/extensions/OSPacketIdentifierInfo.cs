@@ -3,308 +3,290 @@
 using static KON.OctoScan.NET.Constants;
 using static KON.OctoScan.NET.Global;
 
-namespace KON.OctoScan.NET
+namespace KON.OctoScan.NET;
+
+public static class OSPacketIdentifierInfo_Extension
 {
-    public static class OSPacketIdentifierInfo_Extension
+    extension(OSPacketIdentifierInfo opiiLocalOSPacketIdentifierInfo)
     {
-        extension(OSPacketIdentifierInfo opiiLocalOSPacketIdentifierInfo)
+        /// <summary>
+        /// OSPacketIdentifierInfo.ValidateContinuityCounter()
+        /// </summary>
+        /// <param name="rosLocalPacket"></param>
+        /// <returns>bool</returns>
+        public bool ValidateContinuityCounter(ReadOnlySpan<byte> rosLocalPacket)
         {
-            public bool ValidateContinuityCounter(byte[] byaLocalBuffer)
+            LogTrace("OSPacketIdentifierInfo.ValidateContinuityCounter()");
+
+            if (!HasTransportStreamPayload(rosLocalPacket))
+                return true;
+
+            var byCurrentContinuityCounter = rosLocalPacket[3].GetLSB();
+            var bIsValid = ((byte)(opiiLocalOSPacketIdentifierInfo.byContinuityCounter + 1)).GetLSB() == byCurrentContinuityCounter || opiiLocalOSPacketIdentifierInfo.byContinuityCounter == byte.MaxValue;
+
+            if (bIsValid)
+                opiiLocalOSPacketIdentifierInfo.byContinuityCounter = byCurrentContinuityCounter;
+            else
             {
-                lCurrentLogger.Trace("OSPacketIdentifierInfo.ValidateContinuityCounter()".Pastel(ConsoleColor.Cyan));
+                opiiLocalOSPacketIdentifierInfo.Reset();
+                opiiLocalOSPacketIdentifierInfo.bHasContinuityErrors = true;
+            }
 
-                if (!HasTransportStreamPayload(byaLocalBuffer))
-                    return true;
+            return bIsValid;
+        }
 
-                var byCurrentContinuityCounter = byaLocalBuffer[3].GetLSB();
-                var bIsValid = ((byte)(opiiLocalOSPacketIdentifierInfo.byContinuityCounter + 1)).GetLSB() == byCurrentContinuityCounter || opiiLocalOSPacketIdentifierInfo.byContinuityCounter == byte.MaxValue;
+        /// <summary>
+        /// OSPacketIdentifierInfo.WriteSectionToBuffer()
+        /// </summary>
+        /// <param name="rosLocalBuffer"></param>
+        /// <param name="iLocalBufferLength"></param>
+        public void WriteSectionToBuffer(ReadOnlySpan<byte> rosLocalBuffer, int iLocalBufferLength)
+        {
+            LogTrace("OSPacketIdentifierInfo.WriteSectionToBuffer()");
 
-                if (bIsValid)
-                    opiiLocalOSPacketIdentifierInfo.byContinuityCounter = byCurrentContinuityCounter;
-                else
-                {
+            if (opiiLocalOSPacketIdentifierInfo.byaBuffer == null)
+                return;
+
+            rosLocalBuffer[..iLocalBufferLength].CopyTo(opiiLocalOSPacketIdentifierInfo.byaBuffer.AsSpan(opiiLocalOSPacketIdentifierInfo.iBufferPointer));
+            opiiLocalOSPacketIdentifierInfo.iBufferPointer += iLocalBufferLength;
+        }
+
+        /// <summary>
+        /// OSPacketIdentifierInfo.ProcessSection()
+        /// </summary>
+        public void ProcessSection()
+        {
+            LogTrace("OSPacketIdentifierInfo.ProcessSection()");
+
+            if (opiiLocalOSPacketIdentifierInfo.iBufferPointer != opiiLocalOSPacketIdentifierInfo.iBufferLength)
+            {
+                if (opiiLocalOSPacketIdentifierInfo.iBufferLength != 0 && opiiLocalOSPacketIdentifierInfo.iBufferPointer > opiiLocalOSPacketIdentifierInfo.iBufferLength)
                     opiiLocalOSPacketIdentifierInfo.Reset();
-                    opiiLocalOSPacketIdentifierInfo.bHasContinuityErrors = true;
-                }
 
-                return bIsValid;
+                return;
             }
 
-            public void WriteSectionToBuffer(byte[] byaLocalBuffer, int iLocalBufferLength)
+            var byaCurrentBuffer = opiiLocalOSPacketIdentifierInfo.byaBuffer;
+
+            if (byaCurrentBuffer != null)
             {
-                lCurrentLogger.Trace("OSPacketIdentifierInfo.WriteSectionToBuffer()".Pastel(ConsoleColor.Cyan));
-
-                if (opiiLocalOSPacketIdentifierInfo.byaBuffer != null)
+                if ((byaCurrentBuffer[1] & 0x80) != 0 && GetCRC32(byaCurrentBuffer.AsSpan(0, opiiLocalOSPacketIdentifierInfo.iBufferLength)) != 0)
                 {
-                    Buffer.BlockCopy(byaLocalBuffer, 0, opiiLocalOSPacketIdentifierInfo.byaBuffer, opiiLocalOSPacketIdentifierInfo.iBufferPointer, iLocalBufferLength);
-                    opiiLocalOSPacketIdentifierInfo.iBufferPointer += iLocalBufferLength;
-                }
-            }
-
-            public void ProcessSection()
-            {
-                lCurrentLogger.Trace("OSPacketIdentifierInfo.ProcessSection()".Pastel(ConsoleColor.Cyan));
-
-                if (opiiLocalOSPacketIdentifierInfo.iBufferPointer != opiiLocalOSPacketIdentifierInfo.iBufferLength)
-                {
-                    if (opiiLocalOSPacketIdentifierInfo.iBufferLength != 0 && opiiLocalOSPacketIdentifierInfo.iBufferPointer > opiiLocalOSPacketIdentifierInfo.iBufferLength)
-                        opiiLocalOSPacketIdentifierInfo.Reset();
-
+                    lCurrentLogger.Error($"Error: CRC invalid for PID {opiiLocalOSPacketIdentifierInfo.iPacketID:X4}".Pastel(ConsoleColor.Red));
+                    opiiLocalOSPacketIdentifierInfo.Reset();
                     return;
                 }
 
-                if (opiiLocalOSPacketIdentifierInfo.byaBuffer != null)
-                {
-                    if ((opiiLocalOSPacketIdentifierInfo.byaBuffer[1] & 0x80) != 0)
-                    {
-                        if (GetCRC32(opiiLocalOSPacketIdentifierInfo.byaBuffer, opiiLocalOSPacketIdentifierInfo.iBufferLength) != 0)
-                        {
-                            lCurrentLogger.Error($"Error: CRC invalid for PID {opiiLocalOSPacketIdentifierInfo.iPacketID:X4}".Pastel(ConsoleColor.Red));
-                            opiiLocalOSPacketIdentifierInfo.Reset();
-                            return;
-                        }
-                    }
-
-                    if (opiiLocalOSPacketIdentifierInfo.iBufferLength < 8)
-                        return;
-
-                    if ((opiiLocalOSPacketIdentifierInfo.byaBuffer[5] & 1) == 0)
-                        return;
-
-                    var byaTableID = opiiLocalOSPacketIdentifierInfo.byaBuffer[0];
-                    var usTableExtension = (ushort)((opiiLocalOSPacketIdentifierInfo.byaBuffer[3] << 8) | opiiLocalOSPacketIdentifierInfo.byaBuffer[4]);
-
-                    if (!opiiLocalOSPacketIdentifierInfo.CheckSection() && opiiLocalOSPacketIdentifierInfo.iUseTableExtension != 0)
-                    {
-                        if (byaTableID is 0x42 or 0x02)
-                            lCurrentLogger.Error($"Error: Section not matched - Adding {byaTableID:X2}:{usTableExtension:X4}".Pastel(ConsoleColor.Red));
-                    }
-                }
-
-                opiiLocalOSPacketIdentifierInfo.Reset();
+                if (opiiLocalOSPacketIdentifierInfo.iBufferLength >= 8 && (byaCurrentBuffer[5] & 1) != 0)
+                    opiiLocalOSPacketIdentifierInfo.CheckSection();
             }
 
-            public bool CheckSection()
+            opiiLocalOSPacketIdentifierInfo.Reset();
+        }
+
+        /// <summary>
+        /// OSPacketIdentifierInfo.CheckSection()
+        /// </summary>
+        public void CheckSection()
+        {
+            LogTrace("OSPacketIdentifierInfo.CheckSection()");
+
+            var byaCurrentBuffer = opiiLocalOSPacketIdentifierInfo.byaBuffer;
+            var olotsfCurrentOSListOSTransportStreamFilter = opiiLocalOSPacketIdentifierInfo.olotsfOSListOSTransportStreamFilter;
+
+            if (byaCurrentBuffer == null || olotsfCurrentOSListOSTransportStreamFilter == null)
+                return;
+
+            var byCurrentTableID = byaCurrentBuffer[0];
+            var iCurrentTableExtension = (byaCurrentBuffer[3] << 8) | byaCurrentBuffer[4];
+            var byCurrentVersionNumber = (byte)((byaCurrentBuffer[5] & 0x3E) >> 1);
+            var byCurrentSectionNumber = byaCurrentBuffer[6];
+            var byCurrentLastSectionNumber = byaCurrentBuffer[7];
+
+            for (var llnCurrentNode = olotsfCurrentOSListOSTransportStreamFilter.First; llnCurrentNode != null; llnCurrentNode = llnCurrentNode.Next)
             {
-                lCurrentLogger.Trace("OSPacketIdentifierInfo.CheckSection()".Pastel(ConsoleColor.Cyan));
+                var otsfCurrentOSTransportStreamFilter = llnCurrentNode.Value;
 
-                if (opiiLocalOSPacketIdentifierInfo.byaBuffer != null)
+                if (byCurrentTableID != otsfCurrentOSTransportStreamFilter.byTableID)
+                    continue;
+
+                if (opiiLocalOSPacketIdentifierInfo.iUseTableExtension != 0)
                 {
-                    byte byCurrentTableID = opiiLocalOSPacketIdentifierInfo.byaBuffer[0];
-                    int iCurrentTableExtension = (opiiLocalOSPacketIdentifierInfo.byaBuffer[3] << 8) | opiiLocalOSPacketIdentifierInfo.byaBuffer[4];
-                    byte byCurrentVersionNumber = (byte)((opiiLocalOSPacketIdentifierInfo.byaBuffer[5] & 0x3F) >> 1);
-                    byte byCurrentSectionNumber = opiiLocalOSPacketIdentifierInfo.byaBuffer[6];
-                    byte byCurrentLastSectionNumber = opiiLocalOSPacketIdentifierInfo.byaBuffer[7];
-
-                    if (opiiLocalOSPacketIdentifierInfo.olotsfOSListOSTransportStreamFilter != null)
+                    if (otsfCurrentOSTransportStreamFilter.iUseTableExtension == 2)
                     {
-                        for (var i = 0; i < opiiLocalOSPacketIdentifierInfo.olotsfOSListOSTransportStreamFilter.Count; i++)
-                        {
-                            var otsfCurrentOSTransportStreamFilter = opiiLocalOSPacketIdentifierInfo.olotsfOSListOSTransportStreamFilter.ElementAt(i);
-
-                            if (byCurrentTableID != otsfCurrentOSTransportStreamFilter.byTableID)
-                                continue;
-
-                            if (opiiLocalOSPacketIdentifierInfo.iUseTableExtension != 0)
-                            {
-                                if (otsfCurrentOSTransportStreamFilter.iUseTableExtension == 2)
-                                {
-                                    if (iCurrentTableExtension != otsfCurrentOSTransportStreamFilter.iTableExtension)
-                                        continue;
-                                }
-                                else
-                                {
-                                    otsfCurrentOSTransportStreamFilter.iTableExtension = iCurrentTableExtension;
-                                    otsfCurrentOSTransportStreamFilter.iUseTableExtension = 2;
-                                }
-                            }
-
-                            var bDoEITRefresh = false;
-
-                            if (!otsfCurrentOSTransportStreamFilter.bIsVersionNumberSet)
-                            {
-                                otsfCurrentOSTransportStreamFilter.byVersionNumber = byCurrentVersionNumber;
-                                otsfCurrentOSTransportStreamFilter.bIsVersionNumberSet = true;
-                            }
-
-                            if (otsfCurrentOSTransportStreamFilter.byVersionNumber != byCurrentVersionNumber)
-                            {
-                                lCurrentLogger.Warn($"Warning: TableID {byCurrentTableID:X2} TableExtension {iCurrentTableExtension:X4} - VNR change {otsfCurrentOSTransportStreamFilter.byVersionNumber}->{byCurrentVersionNumber}".Pastel(ConsoleColor.Yellow));
-
-                                otsfCurrentOSTransportStreamFilter.bIsToDoSet = false;
-                                otsfCurrentOSTransportStreamFilter.byVersionNumber = byCurrentVersionNumber;
-                                bDoEITRefresh = true;
-                            }
-
-                            if (otsfCurrentOSTransportStreamFilter.bDone)
-                                break;
-
-                            if (!otsfCurrentOSTransportStreamFilter.bIsToDoSet)
-                            {
-                                for (var j = 0; j <= byCurrentLastSectionNumber; j++)
-                                    otsfCurrentOSTransportStreamFilter.laToDo[j >> 5] |= (1U << (j & 31));
-
-                                otsfCurrentOSTransportStreamFilter.bIsToDoSet = true;
-
-                                if (byCurrentTableID is 0x50 or 0x60)
-                                {
-                                    var byTableIDLimit = (byte)(opiiLocalOSPacketIdentifierInfo.byaBuffer[13] & 0x0F);
-                                    for (var j = 1; j <= byTableIDLimit; j++)
-                                        opiiLocalOSPacketIdentifierInfo.otsiOSTransportStreamInfo?.ostOSScanTransponder?.AddSFilter(DEFAULT_PID_EIT, (byte)(byCurrentTableID + j), otsfCurrentOSTransportStreamFilter.iTableExtension, 2, j < 2 ? 15 : 45);
-                                }
-                            }
-
-                            if ((otsfCurrentOSTransportStreamFilter.laToDo[byCurrentSectionNumber >> 5] & (1U << (byCurrentSectionNumber & 31))) != 0)
-                            {
-                                bool bTableResult;
-
-                                switch (byCurrentTableID)
-                                {
-                                    // PAT - Program Access Table
-                                    case 0x00:
-                                        bTableResult = otsfCurrentOSTransportStreamFilter.AddProgramAssociationTableData();
-                                        break;
-                                    // CAT - Conditional Access Table
-                                    case 0x01:
-                                        bTableResult = false;
-                                        break;
-                                    // PMT - Program Map Table
-                                    case 0x02:
-                                        bTableResult = otsfCurrentOSTransportStreamFilter.AddProgramMapTableData();
-                                        break;
-                                    // NIT - Network Information Table (actual and other)
-                                    case 0x40:
-                                        bTableResult = otsfCurrentOSTransportStreamFilter.AddNetworkInformationTableData();
-                                        break;
-                                    case 0x41:
-                                        bTableResult = false;
-                                        break;
-                                    // SDT - Service Description Table (actual and other)
-                                    case 0x42:
-                                        bTableResult = otsfCurrentOSTransportStreamFilter.AddServiceDescriptionTableData();
-                                        break;
-                                    case 0x46:
-                                        bTableResult = false;
-                                        break;
-                                    // EIT - Event Information Table (present/following actual and other, Schedule actual and other)
-                                    case 0x4E or 0x4F or (>= 0x50 and <= 0x5F) or (>= 0x60 and <= 0x6F):
-                                        bTableResult = otsfCurrentOSTransportStreamFilter.AddEventInformationTableData(bDoEITRefresh);
-                                        break;
-                                    default:
-                                        bTableResult = false;
-                                        break;
-                                }
-
-                                if (bTableResult)
-                                {
-                                    otsfCurrentOSTransportStreamFilter.laToDo[byCurrentSectionNumber >> 5] &= ~(1U << (byCurrentSectionNumber & 31));
-
-                                    if (byCurrentTableID is >= 0x4E and <= 0x6F)
-                                    {
-                                        byte bySignalNoiseRatioLimitSpecial = opiiLocalOSPacketIdentifierInfo.byaBuffer[12];
-                                        for (var j = bySignalNoiseRatioLimitSpecial + 1; j <= (bySignalNoiseRatioLimitSpecial | 7); j++)
-                                            otsfCurrentOSTransportStreamFilter.laToDo[j >> 5] &= ~(1U << (j & 31));
-                                    }
-
-                                    if (AllZeroOrCounted(otsfCurrentOSTransportStreamFilter.laToDo, 8))
-                                    {
-                                        otsfCurrentOSTransportStreamFilter.bDone = true;
-                                        opiiLocalOSPacketIdentifierInfo.olotsfOSListOSTransportStreamFilter.Remove(otsfCurrentOSTransportStreamFilter);
-                                    }
-                                    else
-                                    {
-                                        otsfCurrentOSTransportStreamFilter.lTimestamp = CurrentTimestamp();
-                                    }
-
-                                    break;
-                                }
-                            }
-                        }
+                        if (iCurrentTableExtension != otsfCurrentOSTransportStreamFilter.iTableExtension)
+                            continue;
                     }
-
-                    return true;
+                    else
+                    {
+                        otsfCurrentOSTransportStreamFilter.iTableExtension = iCurrentTableExtension;
+                        otsfCurrentOSTransportStreamFilter.iUseTableExtension = 2;
+                    }
                 }
+
+                var bDoEITRefresh = false;
+
+                if (!otsfCurrentOSTransportStreamFilter.bIsVersionNumberSet)
+                {
+                    otsfCurrentOSTransportStreamFilter.byVersionNumber = byCurrentVersionNumber;
+                    otsfCurrentOSTransportStreamFilter.bIsVersionNumberSet = true;
+                }
+
+                if (otsfCurrentOSTransportStreamFilter.byVersionNumber != byCurrentVersionNumber)
+                {
+                    lCurrentLogger.Warn($"Warning: TableID {byCurrentTableID:X2} TableExtension {iCurrentTableExtension:X4} - VNR change {otsfCurrentOSTransportStreamFilter.byVersionNumber}->{byCurrentVersionNumber}".Pastel(ConsoleColor.Yellow));
+
+                    otsfCurrentOSTransportStreamFilter.bIsToDoSet = false;
+                    otsfCurrentOSTransportStreamFilter.byVersionNumber = byCurrentVersionNumber;
+                    bDoEITRefresh = true;
+                }
+
+                if (otsfCurrentOSTransportStreamFilter.bDone)
+                    break;
+
+                if (!otsfCurrentOSTransportStreamFilter.bIsToDoSet)
+                {
+                    for (var j = 0; j <= byCurrentLastSectionNumber; j++)
+                        otsfCurrentOSTransportStreamFilter.laToDo[j >> 5] |= 1U << (j & 31);
+
+                    otsfCurrentOSTransportStreamFilter.bIsToDoSet = true;
+
+                    if (byCurrentTableID is 0x50 or 0x60)
+                    {
+                        var byTableIDLimit = (byte)(byaCurrentBuffer[13] & 0x0F);
+                        for (var j = 1; j <= byTableIDLimit; j++)
+                            opiiLocalOSPacketIdentifierInfo.otsiOSTransportStreamInfo?.ostOSScanTransponder?.AddSFilter(DEFAULT_PID_EIT, (byte)(byCurrentTableID + j), otsfCurrentOSTransportStreamFilter.iTableExtension, 2, j < 2 ? 15 : 45);
+                    }
+                }
+
+                if ((otsfCurrentOSTransportStreamFilter.laToDo[byCurrentSectionNumber >> 5] & (1U << (byCurrentSectionNumber & 31))) == 0)
+                    continue;
+
+                bool bTableResult;
+
+                try
+                {
+                    bTableResult = byCurrentTableID switch
+                    {
+                        // PAT - Program Association Table
+                        0x00 => otsfCurrentOSTransportStreamFilter.AddProgramAssociationTableData(),
+                        // PMT - Program Map Table
+                        0x02 => otsfCurrentOSTransportStreamFilter.AddProgramMapTableData(),
+                        // NIT - Network Information Table (actual)
+                        0x40 => otsfCurrentOSTransportStreamFilter.AddNetworkInformationTableData(),
+                        // SDT - Service Description Table (actual)
+                        0x42 => otsfCurrentOSTransportStreamFilter.AddServiceDescriptionTableData(),
+                        // EIT - Event Information Table (present/following actual and other, Schedule actual and other)
+                        >= 0x4E and <= 0x6F => otsfCurrentOSTransportStreamFilter.AddEventInformationTableData(bDoEITRefresh),
+                        _ => false
+                    };
+                }
+                catch (Exception excCurrentException) when (excCurrentException is IndexOutOfRangeException or ArgumentException)
+                {
+                    lCurrentLogger.Warn($"Warning: Malformed section PID {opiiLocalOSPacketIdentifierInfo.iPacketID:X4} TableID {byCurrentTableID:X2} TableExtension {iCurrentTableExtension:X4} skipped ({excCurrentException.Message})".Pastel(ConsoleColor.Yellow));
+                    bTableResult = false;
+                }
+
+                if (!bTableResult)
+                    continue;
+
+                otsfCurrentOSTransportStreamFilter.laToDo[byCurrentSectionNumber >> 5] &= ~(1U << (byCurrentSectionNumber & 31));
+
+                if (byCurrentTableID is >= 0x4E and <= 0x6F)
+                {
+                    var bySegmentLastSectionNumber = byaCurrentBuffer[12];
+                    for (var j = bySegmentLastSectionNumber + 1; j <= (bySegmentLastSectionNumber | 7); j++)
+                        otsfCurrentOSTransportStreamFilter.laToDo[j >> 5] &= ~(1U << (j & 31));
+                }
+
+                if (AllZeroOrCounted(otsfCurrentOSTransportStreamFilter.laToDo))
+                {
+                    otsfCurrentOSTransportStreamFilter.bDone = true;
+                    olotsfCurrentOSListOSTransportStreamFilter.Remove(llnCurrentNode);
+                }
+                else
+                    otsfCurrentOSTransportStreamFilter.lTimestamp = opiiLocalOSPacketIdentifierInfo.otsiOSTransportStreamInfo?.GetStreamTime() ?? 0;
+
+                break;
+            }
+        }
+
+        /// <summary>
+        /// OSPacketIdentifierInfo.BuildSection()
+        /// </summary>
+        /// <param name="rosLocalPacket"></param>
+        /// <returns>bool</returns>
+        public bool BuildSection(ReadOnlySpan<byte> rosLocalPacket)
+        {
+            LogTrace("OSPacketIdentifierInfo.BuildSection()");
+
+            var iToDo = GetTransportStreamPayload(rosLocalPacket);
+            var iIndex = TS_PACKET_LENGTH - iToDo;
+
+            if (iToDo == 0)
+                return false;
+
+            var iOffset = (rosLocalPacket[1] & 0x40) != 0 ? rosLocalPacket[iIndex++] : iToDo;
+
+            if (iOffset + iIndex > TS_PACKET_LENGTH)
+            {
+                lCurrentLogger.Error("Error: Section building failed".Pastel(ConsoleColor.Red));
+                opiiLocalOSPacketIdentifierInfo.Reset();
 
                 return false;
             }
 
-            public bool BuildSection(byte[] byaLocalTransponder)
+            // Continuation of a section started in a previous packet
+            if (opiiLocalOSPacketIdentifierInfo.ValidateContinuityCounter(rosLocalPacket) && iOffset != 0 && opiiLocalOSPacketIdentifierInfo.iBufferPointer != 0)
             {
-                lCurrentLogger.Trace("OSPacketIdentifierInfo.BuildSection()".Pastel(ConsoleColor.Cyan));
+                var iOffsetAdapted = iOffset;
+                var iBufferLimit = opiiLocalOSPacketIdentifierInfo.iBufferLength != 0 ? opiiLocalOSPacketIdentifierInfo.iBufferLength : MAX_SECTION_LENGTH;
 
-                var iToDo = GetTransportStreamPayload(byaLocalTransponder);
-                var iIndex = 188 - iToDo;
+                if (opiiLocalOSPacketIdentifierInfo.iBufferPointer + iOffsetAdapted > iBufferLimit)
+                    iOffsetAdapted = iBufferLimit - opiiLocalOSPacketIdentifierInfo.iBufferPointer;
 
-                if (iToDo == 0)
-                    return false;
+                opiiLocalOSPacketIdentifierInfo.WriteSectionToBuffer(rosLocalPacket[iIndex..], iOffsetAdapted);
 
-                var iOffset = (byaLocalTransponder[1] & 0x40) != 0 ? byaLocalTransponder[iIndex++] : iToDo;
-
-                if (iOffset + iIndex > 188)
+                if (opiiLocalOSPacketIdentifierInfo.byaBuffer != null)
                 {
-                    lCurrentLogger.Error("Error: Section building failed".Pastel(ConsoleColor.Red));
-                    opiiLocalOSPacketIdentifierInfo.Reset();
-
-                    return false;
-                }
-
-                if (opiiLocalOSPacketIdentifierInfo.ValidateContinuityCounter(byaLocalTransponder) && iOffset != 0 && opiiLocalOSPacketIdentifierInfo.iBufferPointer != 0)
-                {
-                    var iOffsetAdapted = iOffset;
-
-                    if (opiiLocalOSPacketIdentifierInfo.iBufferLength != 0)
-                    {
-                        if (opiiLocalOSPacketIdentifierInfo.iBufferPointer + iOffsetAdapted > opiiLocalOSPacketIdentifierInfo.iBufferLength)
-                            iOffsetAdapted = opiiLocalOSPacketIdentifierInfo.iBufferLength - opiiLocalOSPacketIdentifierInfo.iBufferPointer;
-                    }
+                    if (opiiLocalOSPacketIdentifierInfo is { iBufferLength: 0, iBufferPointer: >= 3 } && (opiiLocalOSPacketIdentifierInfo.iBufferLength = SectorLength(opiiLocalOSPacketIdentifierInfo.byaBuffer)) > MAX_SECTION_LENGTH)
+                        opiiLocalOSPacketIdentifierInfo.Reset();
                     else
-                    {
-                        if (opiiLocalOSPacketIdentifierInfo.iBufferPointer + iOffsetAdapted > 4096)
-                            iOffsetAdapted = 4096 - opiiLocalOSPacketIdentifierInfo.iBufferPointer;
-                    }
-
-                    opiiLocalOSPacketIdentifierInfo.WriteSectionToBuffer(byaLocalTransponder[iIndex..], iOffsetAdapted);
-
-                    if (opiiLocalOSPacketIdentifierInfo.byaBuffer != null)
-                    {
-                        if (opiiLocalOSPacketIdentifierInfo is { iBufferLength: 0, iBufferPointer: >= 3 } && (opiiLocalOSPacketIdentifierInfo.iBufferLength = SectorLength(opiiLocalOSPacketIdentifierInfo.byaBuffer)) > 4096)
-                            opiiLocalOSPacketIdentifierInfo.Reset();
-                        else
-                            opiiLocalOSPacketIdentifierInfo.ProcessSection();
-                    }
-                }
-
-                iIndex += iOffset;
-
-                while ((iToDo = 188 - iIndex) > 0 && byaLocalTransponder[iIndex] != 0xFF)
-                {
-                    opiiLocalOSPacketIdentifierInfo.Reset();
-
-                    if (iToDo < 3)
-                        lCurrentLogger.Warn("Warning: Section start < 3".Pastel(ConsoleColor.Yellow));
-
-                    if (iToDo < 3 || (opiiLocalOSPacketIdentifierInfo.iBufferLength = SectorLength(byaLocalTransponder[iIndex..])) > iToDo)
-                    {
-                        if (opiiLocalOSPacketIdentifierInfo.iBufferLength > 4096)
-                        {
-                            lCurrentLogger.Error("Error: iBufferLength > 4096".Pastel(ConsoleColor.Red));
-                            opiiLocalOSPacketIdentifierInfo.Reset();
-                            return false;
-                        }
-
-                        opiiLocalOSPacketIdentifierInfo.WriteSectionToBuffer(byaLocalTransponder[iIndex..], iToDo);
-                        iIndex += iToDo;
-                    }
-                    else
-                    {
-                        opiiLocalOSPacketIdentifierInfo.WriteSectionToBuffer(byaLocalTransponder[iIndex..], opiiLocalOSPacketIdentifierInfo.iBufferLength);
-                        iIndex += opiiLocalOSPacketIdentifierInfo.iBufferLength;
                         opiiLocalOSPacketIdentifierInfo.ProcessSection();
-                    }
                 }
-
-                return true;
             }
+
+            iIndex += iOffset;
+
+            // New sections starting within this packet
+            while ((iToDo = TS_PACKET_LENGTH - iIndex) > 0 && rosLocalPacket[iIndex] != 0xFF)
+            {
+                opiiLocalOSPacketIdentifierInfo.Reset();
+
+                if (iToDo < 3)
+                    lCurrentLogger.Warn("Warning: Section start < 3".Pastel(ConsoleColor.Yellow));
+
+                if (iToDo < 3 || (opiiLocalOSPacketIdentifierInfo.iBufferLength = SectorLength(rosLocalPacket[iIndex..])) > iToDo)
+                {
+                    if (opiiLocalOSPacketIdentifierInfo.iBufferLength > MAX_SECTION_LENGTH)
+                    {
+                        lCurrentLogger.Error($"Error: iBufferLength > {MAX_SECTION_LENGTH}".Pastel(ConsoleColor.Red));
+                        opiiLocalOSPacketIdentifierInfo.Reset();
+                        return false;
+                    }
+
+                    opiiLocalOSPacketIdentifierInfo.WriteSectionToBuffer(rosLocalPacket[iIndex..], iToDo);
+                    iIndex += iToDo;
+                }
+                else
+                {
+                    opiiLocalOSPacketIdentifierInfo.WriteSectionToBuffer(rosLocalPacket[iIndex..], opiiLocalOSPacketIdentifierInfo.iBufferLength);
+                    iIndex += opiiLocalOSPacketIdentifierInfo.iBufferLength;
+                    opiiLocalOSPacketIdentifierInfo.ProcessSection();
+                }
+            }
+
+            return true;
         }
     }
 }

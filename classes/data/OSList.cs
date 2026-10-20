@@ -1,30 +1,50 @@
-﻿using Pastel;
+﻿using static KON.OctoScan.NET.Global;
 
-using static KON.OctoScan.NET.Global;
+namespace KON.OctoScan.NET;
 
-namespace KON.OctoScan.NET
+public class OSList<T> : LinkedList<T>
 {
-    public class OSList<T> : LinkedList<T>
+    /// <summary>
+    /// OSList.Initialize()
+    /// </summary>
+    public void Initialize()
     {
-        public void Initialize()
-        {
-            lCurrentLogger.Trace("OSList.Initialize()".Pastel(ConsoleColor.Cyan));
+        LogTrace("OSList.Initialize()");
 
-            Clear();
-        }
+        Clear();
+    }
 
-        public bool IsEmpty()
-        {
-            lCurrentLogger.Trace("OSList.IsEmpty()".Pastel(ConsoleColor.Cyan));
+    /// <summary>
+    /// OSList.IsEmpty()
+    /// </summary>
+    /// <returns>bool</returns>
+    public bool IsEmpty()
+    {
+        LogTrace("OSList.IsEmpty()");
 
-            return Count == 0;
-        }
+        return Count == 0;
+    }
 
-        public void Add(T value)
-        {
-            lCurrentLogger.Trace("OSList.Add()".Pastel(ConsoleColor.Cyan));
+    /// <summary>
+    /// OSList.Add(T)
+    /// </summary>
+    /// <param name="TCurrentValue"></param>
+    public void Add(T TCurrentValue)
+    {
+        LogTrace("OSList.Add()");
 
-            AddFirst(value);
-        }
+        AddFirst(TCurrentValue);
+    }
+
+    /// <summary>
+    /// OSList.Nodes()
+    /// </summary>
+    /// <returns>IEnumerable(LinkedListNode(T))</returns>
+    public IEnumerable<LinkedListNode<T>> Nodes()
+    {
+        LogTrace("OSList.Nodes()");
+
+        for (var llnCurrentNode = First; llnCurrentNode != null; llnCurrentNode = llnCurrentNode.Next)
+            yield return llnCurrentNode;
     }
 }

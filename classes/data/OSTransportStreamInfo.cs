@@ -1,47 +1,66 @@
-﻿using Pastel;
-
+﻿using static KON.OctoScan.NET.Constants;
 using static KON.OctoScan.NET.Global;
 
-namespace KON.OctoScan.NET
+namespace KON.OctoScan.NET;
+
+public class OSTransportStreamInfo : IDisposable
 {
-    public class OSTransportStreamInfo : IDisposable
+    public OSList<OSPacketIdentifierInfo>? olopiiOSListOSPacketIdentifierInfo;
+    public OSList<OSTransportStreamFilter>? olotsfOSListOSTransportStreamFilter;
+    public OSScanTransponder? ostOSScanTransponder;
+    public OSPacketIdentifierInfo[]? opiiOSPacketIdentifierInfo;
+
+    public int iTransportStreamID;
+    public bool bDone;
+    public long lStreamClock;
+    public uint uiLastRTPTimestamp;
+    public bool bRTPTimestampValid;
+    public bool bRTPClockFallback;
+    public long lRTPClockStall;
+    public int iRTPClockDiscontinuities;
+    public long lIdleCredit;
+
+    /// <summary>
+    /// OSTransportStreamInfo.Init()
+    /// </summary>
+    public void Init()
     {
-        public OSList<OSPacketIdentifierInfo>? olopiiOSListOSPacketIdentifierInfo;
-        public OSList<OSTransportStreamFilter>? olotsfOSListOSTransportStreamFilter;
-        public OSScanTransponder? ostOSScanTransponder;
-        public OSPacketIdentifierInfo[]? opiiOSPacketIdentifierInfo;
+        LogTrace("OSTransportStreamInfo.Init()");
 
-        public int iTransportStreamID;
-        public bool bDone;
+        bDone = false;
+        lStreamClock = 0;
+        uiLastRTPTimestamp = 0;
+        bRTPTimestampValid = false;
+        bRTPClockFallback = false;
+        lRTPClockStall = 0;
+        iRTPClockDiscontinuities = 0;
+        lIdleCredit = 0;
+        olopiiOSListOSPacketIdentifierInfo = [];
+        olotsfOSListOSTransportStreamFilter = [];
+        opiiOSPacketIdentifierInfo = new OSPacketIdentifierInfo[TS_PID_COUNT];
 
-        public void Init()
+        for (var i = 0; i < TS_PID_COUNT; i++)
         {
-            lCurrentLogger.Trace("OSTransportStreamInfo.Init()".Pastel(ConsoleColor.Cyan));
+            opiiOSPacketIdentifierInfo[i] = new OSPacketIdentifierInfo();
+            opiiOSPacketIdentifierInfo[i].Init(i, this);
+        }
+    }
 
-            bDone = false;
-            olopiiOSListOSPacketIdentifierInfo = [];
-            olotsfOSListOSTransportStreamFilter = [];
-            opiiOSPacketIdentifierInfo = new OSPacketIdentifierInfo[8192];
+    /// <summary>
+    /// OSTransportStreamInfo.Dispose()
+    /// </summary>
+    public void Dispose()
+    {
+        LogTrace("OSTransportStreamInfo.Dispose()");
 
-            for (var i = 0; i < 8192; i++)
-            {
-                opiiOSPacketIdentifierInfo[i] = new OSPacketIdentifierInfo();
-                opiiOSPacketIdentifierInfo[i].Init(i, this);
-            }
+        if (opiiOSPacketIdentifierInfo != null)
+        {
+            foreach (var opiiCurrentOSPacketIdentifierInfo in opiiOSPacketIdentifierInfo)
+                opiiCurrentOSPacketIdentifierInfo.Dispose();
         }
 
-        public void Dispose()
-        {
-            lCurrentLogger.Trace("OSTransportStreamInfo.Dispose()".Pastel(ConsoleColor.Cyan));
-
-            olopiiOSListOSPacketIdentifierInfo = null;
-            olotsfOSListOSTransportStreamFilter = null;
-            opiiOSPacketIdentifierInfo = null;
-
-            for (var i = 0; i < 8192; i++)
-            {
-                opiiOSPacketIdentifierInfo?[i].Dispose();
-            }
-        }
+        olopiiOSListOSPacketIdentifierInfo = null;
+        olotsfOSListOSTransportStreamFilter = null;
+        opiiOSPacketIdentifierInfo = null;
     }
 }

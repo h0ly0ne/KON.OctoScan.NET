@@ -4,18 +4,24 @@
 Copyright (C) 2016 Digital Devices GmbH
 Copyright (C) 2024 Oswald Oliver
 
+  --serverport               (Default: 554) Port of SAT>IP server
+  --ipv6                     (Default: false) Enable IPv6 Support
   --mode                     Required. Execution mode / Operation selection: scan/parsedate
   --mjd                      Parse Date from Modified Julian Date.
-  --frequencies              Frequencies in MHz.
-                             Example: --frequencies=378
-  --modulationsystem         Required. Modulation System.
+  --frequencies              Frequencies in MHz, comma separated. Ranges as start-end:step.
+                             Example: --frequencies=378,410-466:8
+  --modulationsystem         Modulation System (required for scan).
                              Example: --modulationsystem=dvbc
   --modulationtype           Modulation Type (required for DVB-C).
                              Example: --modulationtype=t256qam
   --symbolrate               Symbolrate in kSymbols (required for DVB-S/S2 and DVB-C).
                              Example: --symbolrate=6900
-  --transpondertimeout       Timeout in seconds for transponder scanning.
-                             Example: --transpondertimeout=30
+  --scanretries              Retries per transponder (new connection and session) on timeouts and
+                             temporary server errors (default 3).
+                             Example: --scanretries=3
+  --tunerlockgracetime       Time in milliseconds the tuner gets to lock before a transponder is
+                             skipped as without signal (default 3000).
+                             Example: --tunerlockgracetime=5000
   --satellitesource          Satellite source 1,2,3,4 (required for DVB-S/S2).
                              Example: --satellitesource=1
   --polarisation             Polarisation v,h,r,l (required for DVB-S/S2).
@@ -32,15 +38,15 @@ Copyright (C) 2024 Oswald Oliver
   --imagestreamidentifier    ImageStreamIdentifier for physical layer pipe.
                              Example: --imagestreamidentifier=1
   --printservices            Output result from services scan.
-  --exportservices           Export result from services scan.
+  --exportservices           Export result from services scan to json file.
   --exportservicesexcel      Export result from services scan to excel file.
   --printevents              Output result from events scan.
-  --exportevents             Export result from events scan.
+  --exportevents             Export result from events scan to json file.
   --exporteventsexcel        Export result from events scan to excel file.
   --verbose                  Set output to verbose level.
   --help                     Display this help screen.
   --version                  Display version information.
-  <server ip> (pos. 0)       Required. IP Address of SAT>IP server
+  <server ip> (pos. 0)       IP Address of SAT>IP server (required for scan)
 
 * Notes on NIT scanning:
     With some cable providers or inhouse retransmission systems
@@ -54,3 +60,4 @@ Copyright (C) 2024 Oswald Oliver
 * Example: NIT based scan which should work on Unitymedia in Germany
     KON.OctoScan.NET --mode scan --frequencies=138 --modulationsystem=dvbc
                      --symbolrate=6900 --modulationtype=t256qam --nit 10.0.4.24
+```

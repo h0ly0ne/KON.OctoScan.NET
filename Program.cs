@@ -62,7 +62,7 @@ namespace KON.OctoScan.NET
 
         public class Options
         {
-            [Value(0, MetaName = "<server ip>", HelpText = "IP Address of SAT>IP server", Required = true)]
+            [Value(0, MetaName = "<server ip>", HelpText = "IP Address of SAT>IP server (required for scan)", Required = false)]
             public string? cloServerIP { get; set; }
 
             [Option(longName: "serverport", Required = false, HelpText = "Port of SAT>IP server", Default = 554)]
@@ -79,10 +79,10 @@ namespace KON.OctoScan.NET
             [Option(longName: "mjd", Required = false, HelpText = "Parse Date from Modified Julian Date.")]
             public long? cloModifiedJulianDate { get; set; }
 
-            [Option(longName: "frequencies", Required = false, HelpText = "Frequencies in MHz.\r\nExample: --frequencies=378")]
+            [Option(longName: "frequencies", Required = false, HelpText = "Frequencies in MHz, comma separated. Ranges as start-end:step.\r\nExample: --frequencies=378,410-466:8")]
             public string? cloFrequenciesInMHz { get; set; }
 
-            [Option(longName: "modulationsystem", Required = true, HelpText = "Modulation System.\r\nExample: --modulationsystem=dvbc")]
+            [Option(longName: "modulationsystem", Required = false, HelpText = "Modulation System (required for scan).\r\nExample: --modulationsystem=dvbc")]
             public FlagModulationSystem? cloModulationSystem { get; set; }
 
             [Option(longName: "modulationtype", Required = false, HelpText = "Modulation Type (required for DVB-C).\r\nExample: --modulationtype=t256qam")]
@@ -91,11 +91,11 @@ namespace KON.OctoScan.NET
             [Option(longName: "symbolrate", Required = false, HelpText = "Symbolrate in kSymbols (required for DVB-S/S2 and DVB-C).\r\nExample: --symbolrate=6900")]
             public int? cloSymbolRateInkSymbols { get; set; }
 
-            [Option(longName: "scanretries", Required = false, HelpText = "Retries for scanning.\r\nExample: --scanretries=3")]
+            [Option(longName: "scanretries", Required = false, HelpText = "Retries per transponder (new connection and session) on timeouts and temporary server errors (default 3).\r\nExample: --scanretries=3")]
             public int? cloScanRetries { get; set; }
 
-            [Option(longName: "transponderretries", Required = false, HelpText = "Retries for transponder scanning.\r\nExample: --transponderretries=10")]
-            public int? cloTransponderRetries { get; set; }
+            [Option(longName: "tunerlockgracetime", Required = false, HelpText = "Time in milliseconds the tuner gets to lock before a transponder is skipped as without signal (default 3000).\r\nExample: --tunerlockgracetime=5000")]
+            public int? cloTunerLockGraceTime { get; set; }
 
             //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
@@ -127,7 +127,7 @@ namespace KON.OctoScan.NET
             [Option(longName: "printservices", Required = false, HelpText = "Output result from services scan.")]
             public bool cloPrintServices { get; set; }
 
-            [Option(longName: "exportservices", Required = false, HelpText = "Export result from services scan.")]
+            [Option(longName: "exportservices", Required = false, HelpText = "Export result from services scan to json file.")]
             public bool cloExportServices { get; set; }
 
             [Option(longName: "exportservicesexcel", Required = false, HelpText = "Export result from services scan to excel file.")]
@@ -136,7 +136,7 @@ namespace KON.OctoScan.NET
             [Option(longName: "printevents", Required = false, HelpText = "Output result from events scan.")]
             public bool cloPrintEvents { get; set; }
 
-            [Option(longName: "exportevents", Required = false, HelpText = "Export result from events scan.")]
+            [Option(longName: "exportevents", Required = false, HelpText = "Export result from events scan to json file.")]
             public bool cloExportEvents { get; set; }
 
             [Option(longName: "exporteventsexcel", Required = false, HelpText = "Export result from events scan to excel file.")]
@@ -200,188 +200,209 @@ namespace KON.OctoScan.NET
                 return HelpText.DefaultParsingErrorsHandler(result, htCurrentHelpText);
             }, e => e);
 
+
             lCurrentLogger.Info(htCurrentHelpText);
 
-            #if DEBUG
-                lCurrentLogger.Info($"Press any key to continue ...".Pastel(ConsoleColor.Green));
-                Console.ReadKey();
-            #endif
+            WaitForKeyPress();
+        }
+
+        [System.Diagnostics.Conditional("DEBUG")]
+        private static void WaitForKeyPress()
+        {
+            if (Console.IsInputRedirected)
+                return;
+
+            lCurrentLogger.Info("Press any key to continue ...".Pastel(ConsoleColor.Green));
+            Console.ReadKey();
         }
 
         private static void Run(Options oLocalOptions)
         {
             #if DEBUG
-                if (OperatingSystem.IsWindows())
-                    Console.BufferHeight = short.MaxValue - 1;
+                try
+                {
+                    if (OperatingSystem.IsWindows())
+                        Console.BufferHeight = short.MaxValue - 1;
+                }
+                catch (Exception)
+                {
+                    // Not supported by every terminal
+                }
             #endif
 
             oCurrentOptions = oLocalOptions;
 
-            if (CreateFirewallRule())
+            switch (oLocalOptions.cloMode)
             {
-                switch (oLocalOptions.cloMode)
+                case FlagMode.parsedate:
                 {
-                    case FlagMode.parsedate:
+                    if (oLocalOptions.cloModifiedJulianDate is not ( >= 0 and <= ushort.MaxValue))
                     {
-                        var iModifiedJulianDate = Convert.ToInt32(oLocalOptions.cloModifiedJulianDate);
-                        int iYear = 0, iMonth = 0, iDay = 0;
-
-                        GetDateFromModifiedJulianDate(iModifiedJulianDate, ref iYear, ref iMonth, ref iDay);
-                        lCurrentLogger.Info($"Date = {iDay:00}.{iMonth:00}.{iYear:00}".Pastel(ConsoleColor.Cyan));
-
+                        lCurrentLogger.Error("Error: --mjd with a value between 0 and 65535 is required for mode parsedate".Pastel(ConsoleColor.Red));
                         break;
                     }
-                    case FlagMode.scan:
+
+                    lCurrentLogger.Info($"Date = {GetDateFromModifiedJulianDate((int)oLocalOptions.cloModifiedJulianDate):dd.MM.yyyy}".Pastel(ConsoleColor.Cyan));
+
+                    break;
+                }
+                case FlagMode.scan:
+                {
+                    if (!ValidateScanOptions(oLocalOptions))
+                        break;
+
+                    if (!CreateFirewallRule())
                     {
-                        if(!string.IsNullOrEmpty(oLocalOptions.cloFrequenciesInMHz) && oLocalOptions is { cloModulationSystem: not null, cloSymbolRateInkSymbols: not null })
+                        lCurrentLogger.Error("Firewall rule has not been created as there are not sufficient permissions or wrong operation system used. Operation stopped!".Pastel(ConsoleColor.Red));
+                        break;
+                    }
+
+                    using (var osiCurrentOSScanIP = new OSScanIP())
+                    {
+                        osiCurrentOSScanIP.Init(oLocalOptions.cloServerIP);
+
+                        foreach (var iCurrentFrequency in ParseFrequencies(oLocalOptions.cloFrequenciesInMHz!))
+                            osiCurrentOSScanIP.AddTransponderInfo(CreateTransponderInfo(oLocalOptions, iCurrentFrequency));
+
+                        osiCurrentOSScanIP.Scan(iLocalScanRetries: oLocalOptions.cloScanRetries, iLocalTunerLockGraceTime: oLocalOptions.cloTunerLockGraceTime, iLocalServerPort: oLocalOptions.cloServerPort);
+                        bDone = true;
+
+                        if (oLocalOptions.cloExportServices)
+                            osiCurrentOSScanIP.ExportServicesToJson();
+
+                        if (oLocalOptions.cloExportServicesExcel)
+                            osiCurrentOSScanIP.ExportServicesToExcel();
+
+                        if (oLocalOptions is { cloEventInformationTable: true, cloExportEvents: true })
+                            osiCurrentOSScanIP.ExportEventsToJson();
+
+                        if (oLocalOptions is { cloEventInformationTable: true, cloExportEventsExcel: true })
+                            osiCurrentOSScanIP.ExportEventsToExcel();
+
+                        // Counted from the scan result - matches the sum of "SERVICES FOUND" of all transponders
+                        var losCurrentServices = osiCurrentOSScanIP.olotiOSListOSTransponderInfoDone?.OfType<OSTransponderInfo>().SelectMany(otiCurrentOSTransponderInfo => otiCurrentOSTransponderInfo.olosOSListOSService).ToList() ?? [];
+
+                        lCurrentLogger.Info($"SCAN    Transponders: {osiCurrentOSScanIP.olotiOSListOSTransponderInfoDone?.Count ?? 0}    Services: {losCurrentServices.Count}".Pastel(ConsoleColor.Cyan));
+
+                        if (oLocalOptions.cloEventInformationTable)
                         {
-                            using (var osiCurrentOSScanIP = new OSScanIP())
-                            {
-                                osiCurrentOSScanIP.Init(oLocalOptions.cloServerIP);
-
-                                var saFrequencies = oLocalOptions.cloFrequenciesInMHz.Split(',');
-                                var lsFrequencies = new List<string>();
-
-                                foreach (var strFrequency in saFrequencies)
-                                {
-                                    if (strFrequency.Contains('-') && strFrequency[^2] == ':')
-                                    {
-                                        var saFrequenciesRange = strFrequency.Split('-');
-
-                                        if (saFrequenciesRange.Length == 2)
-                                        {
-                                            var iFrequenciesRangeStart = Convert.ToInt32(saFrequenciesRange[0]);
-                                            var iFrequenciesRangeEnd = Convert.ToInt32(saFrequenciesRange[1].Split(':')[0]);
-                                            var iFrequenciesRangeStep = Convert.ToInt32(saFrequenciesRange[1].Split(':')[1]);
-
-                                            if (iFrequenciesRangeEnd > iFrequenciesRangeStart && (iFrequenciesRangeEnd - iFrequenciesRangeStart) % iFrequenciesRangeStep == 0)
-                                            {
-                                                for (var iCurrentFrequency = iFrequenciesRangeStart; iCurrentFrequency <= iFrequenciesRangeEnd; iCurrentFrequency += iFrequenciesRangeStep)
-                                                {
-                                                    lsFrequencies.Add(Convert.ToString(iCurrentFrequency));
-                                                }
-                                            }
-                                            else
-                                            {
-                                                if (iFrequenciesRangeStart == iFrequenciesRangeEnd)
-                                                    lsFrequencies.Add(Convert.ToString(iFrequenciesRangeStart));
-                                                else
-                                                    lCurrentLogger.Warn("-» Invalid frequency start/end/step".Pastel(ConsoleColor.Yellow));
-                                            }
-                                        }
-                                    }
-                                    else
-                                    {
-                                        lsFrequencies.Add(strFrequency);
-                                    }
-                                }
-
-                                foreach (var otiCurrentOSTransponderInfo in lsFrequencies.Select(lsFrequency => new OSTransponderInfo { iFrequency = Convert.ToInt32(lsFrequency) }))
-                                {
-                                    for (var iModulationSystemCounter = 0; iModulationSystemCounter < ModulationSystem2String.Length; iModulationSystemCounter++)
-                                    {
-                                        if (ModulationSystem2String[iModulationSystemCounter] != oLocalOptions.cloModulationSystem.ToString())
-                                            continue;
-
-                                        otiCurrentOSTransponderInfo.iModulationSystem = iModulationSystemCounter;
-                                        break;
-                                    }
-
-                                    otiCurrentOSTransponderInfo.iSymbolRate = Convert.ToInt32(oLocalOptions.cloSymbolRateInkSymbols);
-
-                                    if (oLocalOptions.cloModulationType != null)
-                                    {
-                                        for (var iModulationTypeCounter = 0; iModulationTypeCounter < ModulationType2String.Length; iModulationTypeCounter++)
-                                        {
-                                            if (ModulationType2String[iModulationTypeCounter] != oLocalOptions.cloModulationType.ToString()?[1..])
-                                                continue;
-
-                                            otiCurrentOSTransponderInfo.iModulationType = iModulationTypeCounter;
-                                            break;
-                                        }
-                                    }
-
-                                    if (!string.IsNullOrEmpty(oLocalOptions.cloPolarisation))
-                                    {
-                                        var iCurrentCounter = 0;
-                                        foreach (var strPolarisation in Polarisation2String)
-                                        {
-                                            if (strPolarisation == oLocalOptions.cloPolarisation)
-                                                otiCurrentOSTransponderInfo.iPolarisation = iCurrentCounter;
-
-                                            iCurrentCounter++;
-                                        }
-                                    }
-
-                                    if (!string.IsNullOrEmpty(oLocalOptions.cloBandwidth))
-                                    {
-                                        var iCurrentCounter = 0;
-                                        foreach (var strBandwidth in Bandwidth2String)
-                                        {
-                                            if (strBandwidth == oLocalOptions.cloBandwidth)
-                                                otiCurrentOSTransponderInfo.iBandwidth = iCurrentCounter;
-
-                                            iCurrentCounter++;
-                                        }
-                                    }
-
-                                    if (oLocalOptions.cloSatelliteSource != null)
-                                        otiCurrentOSTransponderInfo.iSource = Convert.ToInt32(oLocalOptions.cloSatelliteSource);
-
-                                    if (oLocalOptions.cloNetworkInformationTable)
-                                        otiCurrentOSTransponderInfo.bUseNetworkInformationTable = oLocalOptions.cloNetworkInformationTable;
-
-                                    if (oLocalOptions.cloEventInformationTable)
-                                        otiCurrentOSTransponderInfo.bScanEventInformationTable = oLocalOptions.cloEventInformationTable;
-
-                                    if (!string.IsNullOrEmpty(oLocalOptions.cloEventInformationTableSIDFilter))
-                                    {
-                                        var saEitSidList = oLocalOptions.cloEventInformationTableSIDFilter.Split(',');
-                                        var istrCurrentEitSidListCounter = 0;
-
-                                        foreach (var strCurrentEitSidListItem in saEitSidList.Take(MAX_EIT_SID))
-                                        {
-                                            if (otiCurrentOSTransponderInfo.iaEventInformationTableServiceID[istrCurrentEitSidListCounter] == 0)
-                                                otiCurrentOSTransponderInfo.iaEventInformationTableServiceID[istrCurrentEitSidListCounter] = Convert.ToInt32(strCurrentEitSidListItem);
-
-                                            istrCurrentEitSidListCounter++;
-                                        }
-                                    }
-
-                                    if (oLocalOptions.cloPhysicalLayerPipes is not null)
-                                        otiCurrentOSTransponderInfo.iInputStreamID = Convert.ToInt32(oLocalOptions.cloPhysicalLayerPipes) > 255 ? 0 : Convert.ToInt32(oLocalOptions.cloPhysicalLayerPipes);
-
-                                    osiCurrentOSScanIP.AddTransponderInfo(otiCurrentOSTransponderInfo);
-                                }
-
-                                osiCurrentOSScanIP.Scan(iLocalScanRetries: oLocalOptions.cloScanRetries, iLocalTransponderRetries: oLocalOptions.cloTransponderRetries, iLocalServerPort: oLocalOptions.cloServerPort);
-                                bDone = true;
-
-                                if (oLocalOptions is { cloEventInformationTable: true, cloExportEventsExcel: true })
-                                    osiCurrentOSScanIP.ExportEventsToExcel();
-
-                                if (oLocalOptions.cloExportServicesExcel)
-                                    osiCurrentOSScanIP.ExportServicesToExcel();
-                            }
-
-                            lCurrentLogger.Info($"SCAN    Services: {iServices}".Pastel(ConsoleColor.Cyan));
-                            lCurrentLogger.Info($"EIT   Total size: {iEITSize}           Short size: {iEITShortSize}".Pastel(ConsoleColor.Cyan));
-                            lCurrentLogger.Info($"EIT     Services: {iEITServices}             Sections: {iEITSections}               Events: {iEITEvents - iEITEventsDeleted}                 ({iEITEventsDeleted} deleted)".Pastel(ConsoleColor.Cyan));
+                            lCurrentLogger.Info($"EIT     Services: {losCurrentServices.Count(osCurrentOSService => osCurrentOSService.oloeOSListOSEvent.Count > 0)}    Events: {losCurrentServices.Sum(osCurrentOSService => osCurrentOSService.oloeOSListOSEvent.Count)}".Pastel(ConsoleColor.Cyan));
+                            lCurrentLogger.Info($"EIT     Received sections: {iEITSections}    Total size: {iEITSize}    Short size: {iEITShortSize}    Events dropped by version change: {iEITEventsDeleted}".Pastel(ConsoleColor.Cyan));
                         }
-
-                        break;
                     }
+
+                    break;
                 }
             }
-            else
+
+            WaitForKeyPress();
+        }
+
+        private static bool ValidateScanOptions(Options oLocalOptions)
+        {
+            var lsCurrentErrors = new List<string>();
+
+            if (string.IsNullOrWhiteSpace(oLocalOptions.cloServerIP))
+                lsCurrentErrors.Add("<server ip> is required");
+
+            if (string.IsNullOrWhiteSpace(oLocalOptions.cloFrequenciesInMHz))
+                lsCurrentErrors.Add("--frequencies is required");
+
+            switch (oLocalOptions.cloModulationSystem)
             {
-                lCurrentLogger.Error("Firewall rule has not been created as there are not sufficient permissions or wrong operation system used. Operation stopped!".Pastel(ConsoleColor.Red));
+                case null:
+                    lsCurrentErrors.Add("--modulationsystem is required");
+                    break;
+                case FlagModulationSystem.dvbc or FlagModulationSystem.dvbs or FlagModulationSystem.dvbs2 when oLocalOptions.cloSymbolRateInkSymbols is null:
+                    lsCurrentErrors.Add($"--symbolrate is required for {oLocalOptions.cloModulationSystem}");
+                    break;
             }
 
-            #if DEBUG
-                lCurrentLogger.Info($"Press any key to continue ...".Pastel(ConsoleColor.Green));
-                Console.ReadKey();
-            #endif
+            if (!string.IsNullOrEmpty(oLocalOptions.cloPolarisation) && !Polarisation2String.Contains(oLocalOptions.cloPolarisation))
+                lsCurrentErrors.Add($"--polarisation must be one of {string.Join(",", Polarisation2String)}");
+
+            if (!string.IsNullOrEmpty(oLocalOptions.cloBandwidth) && !Bandwidth2String.Contains(oLocalOptions.cloBandwidth))
+                lsCurrentErrors.Add($"--bandwidth must be one of {string.Join(",", Bandwidth2String)}");
+
+            if (oLocalOptions.cloTunerLockGraceTime < 0)
+                lsCurrentErrors.Add("--tunerlockgracetime must not be negative");
+
+            foreach (var strCurrentError in lsCurrentErrors)
+                lCurrentLogger.Error($"Error: {strCurrentError}".Pastel(ConsoleColor.Red));
+
+            return lsCurrentErrors.Count == 0;
+        }
+
+        /// <summary>
+        /// Parses a comma separated list of frequencies and ranges (start-end:step), i.e. "138,346-858:8"
+        /// </summary>
+        /// <param name="strLocalFrequencies"></param>
+        /// <returns></returns>
+        private static List<int> ParseFrequencies(string strLocalFrequencies)
+        {
+            var liCurrentFrequencies = new List<int>();
+
+            foreach (var strCurrentFrequency in strLocalFrequencies.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var saCurrentRange = strCurrentFrequency.Split(['-', ':']);
+
+                if (saCurrentRange.Length == 1 && int.TryParse(saCurrentRange[0], out var iCurrentFrequency))
+                {
+                    liCurrentFrequencies.Add(iCurrentFrequency);
+                }
+                else if (saCurrentRange.Length == 3 && int.TryParse(saCurrentRange[0], out var iRangeStart) && int.TryParse(saCurrentRange[1], out var iRangeEnd) && int.TryParse(saCurrentRange[2], out var iRangeStep) && iRangeStep > 0 && iRangeEnd >= iRangeStart)
+                {
+                    if ((iRangeEnd - iRangeStart) % iRangeStep != 0)
+                        lCurrentLogger.Warn($"-» Frequency range {strCurrentFrequency} does not end on a step - last frequency is {iRangeEnd - (iRangeEnd - iRangeStart) % iRangeStep}".Pastel(ConsoleColor.Yellow));
+
+                    for (var iCurrentRangeFrequency = iRangeStart; iCurrentRangeFrequency <= iRangeEnd; iCurrentRangeFrequency += iRangeStep)
+                        liCurrentFrequencies.Add(iCurrentRangeFrequency);
+                }
+                else
+                {
+                    lCurrentLogger.Warn($"-» Invalid frequency or frequency range {strCurrentFrequency} skipped".Pastel(ConsoleColor.Yellow));
+                }
+            }
+
+            return liCurrentFrequencies;
+        }
+
+        private static OSTransponderInfo CreateTransponderInfo(Options oLocalOptions, int iLocalFrequency)
+        {
+            var otiCurrentOSTransponderInfo = new OSTransponderInfo
+            {
+                iFrequency = iLocalFrequency,
+                iModulationSystem = Array.IndexOf(ModulationSystem2String, oLocalOptions.cloModulationSystem.ToString()),
+                iSymbolRate = oLocalOptions.cloSymbolRateInkSymbols ?? 0,
+                iSource = oLocalOptions.cloSatelliteSource ?? 0,
+                bUseNetworkInformationTable = oLocalOptions.cloNetworkInformationTable,
+                bScanEventInformationTable = oLocalOptions.cloEventInformationTable,
+                iInputStreamID = oLocalOptions.cloPhysicalLayerPipes is >= 0 and <= 255 ? oLocalOptions.cloPhysicalLayerPipes.Value : 0
+            };
+
+            if (oLocalOptions.cloModulationType != null)
+                otiCurrentOSTransponderInfo.iModulationType = Math.Max(Array.IndexOf(ModulationType2String, oLocalOptions.cloModulationType.ToString()?[1..]), 0);
+
+            if (!string.IsNullOrEmpty(oLocalOptions.cloPolarisation))
+                otiCurrentOSTransponderInfo.iPolarisation = Array.IndexOf(Polarisation2String, oLocalOptions.cloPolarisation);
+
+            if (!string.IsNullOrEmpty(oLocalOptions.cloBandwidth))
+                otiCurrentOSTransponderInfo.iBandwidth = Array.IndexOf(Bandwidth2String, oLocalOptions.cloBandwidth);
+
+            if (!string.IsNullOrEmpty(oLocalOptions.cloEventInformationTableSIDFilter))
+            {
+                var iCurrentServiceIDCounter = 0;
+
+                foreach (var strCurrentServiceID in oLocalOptions.cloEventInformationTableSIDFilter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(MAX_EIT_SID))
+                {
+                    if (int.TryParse(strCurrentServiceID, out var iCurrentServiceID))
+                        otiCurrentOSTransponderInfo.iaEventInformationTableServiceID[iCurrentServiceIDCounter++] = iCurrentServiceID;
+                    else
+                        lCurrentLogger.Warn($"-» Invalid service id {strCurrentServiceID} in --eitfiltersid skipped".Pastel(ConsoleColor.Yellow));
+                }
+            }
+
+            return otiCurrentOSTransponderInfo;
         }
     }
 }

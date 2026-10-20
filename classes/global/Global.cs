@@ -1,330 +1,400 @@
-﻿using System.Collections;
-using System.Data;
-using System.Reflection;
+﻿using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 
-using NetFwTypeLib;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
 using NLog;
 using Pastel;
 
 using static KON.OctoScan.NET.Constants;
 using static KON.OctoScan.NET.Program;
 
-namespace KON.OctoScan.NET
+namespace KON.OctoScan.NET;
+
+public static class Global
 {
-    public static class Global
+    public static readonly Logger lCurrentLogger = LogManager.GetCurrentClassLogger();
+
+    public static Options? oCurrentOptions;
+
+    public static bool bDone = false;
+    
+    public static int iEITSize = 0;
+    public static int iEITSections = 0;
+    public static int iEITShortSize = 0;
+    public static int iEITEventsDeleted = 0;
+
+    private static Encoding? eISO6937Encoding;
+    private static readonly Dictionary<int, Encoding> dieISO8859Encodings = [];
+    private static readonly Dictionary<string, string> dssEventLanguages = new(StringComparer.OrdinalIgnoreCase);
+
+    private const int NET_FW_IP_PROTOCOL_TCP = 6;
+    private const int NET_FW_IP_PROTOCOL_UDP = 17;
+    private const int NET_FW_RULE_DIR_IN = 1;
+    private const int NET_FW_RULE_DIR_OUT = 2;
+    private const int NET_FW_ACTION_ALLOW = 1;
+
+    /// <summary>
+    /// Global.LogTrace()
+    /// </summary>
+    /// <param name="strLocalMessage"></param>
+    public static void LogTrace(string strLocalMessage)
     {
-        public static readonly Logger lCurrentLogger = LogManager.GetCurrentClassLogger();
-
-        public static Options? oCurrentOptions;
-
-        public static bool bDone = false;
-        public static int iServices = 0;
-        public static int iEITSize = 0;
-        public static int iEITServices = 0;
-        public static int iEITSections = 0;
-        public static int iEITEvents = 0;
-        public static int iEITShortSize = 0;
-        public static int iEITEventsDeleted = 0;
-
-        public static DataTable dtExportServices = new();
-        public static DataTable dtExportEvents = new();
-
-        /// <summary>
-        /// Global.CurrentTimestamp()
-        /// </summary>
-        /// <returns></returns>
-        public static long CurrentTimestamp()
-        {
-            lCurrentLogger.Trace("Global.CurrentTimestamp()".Pastel(ConsoleColor.Cyan));
-
-            return DateTimeOffset.Now.ToUnixTimeSeconds();
-        }
-
-        /// <summary>
-        /// Global.CreateFirewallRule()
-        /// </summary>
-        /// <returns></returns>
-        public static bool CreateFirewallRule()
-        {
-            lCurrentLogger.Trace("Global.CreateFirewallRule()".Pastel(ConsoleColor.Cyan));
-
-            if (OperatingSystem.IsWindows())
-            {
-                var tCurrentFwPolicyType = Type.GetTypeFromProgID("HNetCfg.FwPolicy2", false);
-                var tCurrentFwRuleType = Type.GetTypeFromProgID("HNetCfg.FWRule", false);
-
-                if (tCurrentFwPolicyType != null && tCurrentFwRuleType != null)
-                {
-                    var oCurrentFwPolicyObject = Activator.CreateInstance(tCurrentFwPolicyType);
-                    var oCurrentFwRuleObject = Activator.CreateInstance(tCurrentFwRuleType);
-
-                    if (oCurrentFwPolicyObject != null && oCurrentFwRuleObject != null)
-                    {
-                        var infp2CurrentINetFwPolicy2 = (INetFwPolicy2)oCurrentFwPolicyObject;
-                        var infrCurrentINetFwRules = infp2CurrentINetFwPolicy2.Rules;
-
-                        if (infrCurrentINetFwRules != null)
-                        {
-                            try
-                            {
-                                infrCurrentINetFwRules.Remove(FIREWALL_RULE_APP_NAME + "_OUT_TCP");
-                                infrCurrentINetFwRules.Remove(FIREWALL_RULE_APP_NAME + "_OUT_UDP");
-                                infrCurrentINetFwRules.Remove(FIREWALL_RULE_APP_NAME + "_IN_TCP");
-                                infrCurrentINetFwRules.Remove(FIREWALL_RULE_APP_NAME + "_IN_UDP");
-
-                                var infrCurrentINetFwRule = (INetFwRule)Activator.CreateInstance(tCurrentFwRuleType)!;
-                                infrCurrentINetFwRule.Name = FIREWALL_RULE_APP_NAME + "_OUT_TCP";
-                                infrCurrentINetFwRule.Description = FIREWALL_RULE_APP_NAME + "_OUT_TCP";
-                                infrCurrentINetFwRule.Protocol = 6;
-                                infrCurrentINetFwRule.Action = NET_FW_ACTION_.NET_FW_ACTION_ALLOW;
-                                infrCurrentINetFwRule.Direction = NET_FW_RULE_DIRECTION_.NET_FW_RULE_DIR_OUT;
-                                infrCurrentINetFwRule.ApplicationName = Environment.ProcessPath;
-                                infrCurrentINetFwRule.Enabled = true;
-                                infrCurrentINetFwRule.InterfaceTypes = "All";
-                                infrCurrentINetFwRules.Add(infrCurrentINetFwRule);
-
-                                var infrCurrentINetFwRule2 = (INetFwRule)Activator.CreateInstance(tCurrentFwRuleType)!;
-                                infrCurrentINetFwRule2.Name = FIREWALL_RULE_APP_NAME + "_IN_TCP";
-                                infrCurrentINetFwRule2.Description = FIREWALL_RULE_APP_NAME + "_IN_TCP";
-                                infrCurrentINetFwRule2.Protocol = 6;
-                                infrCurrentINetFwRule2.Action = NET_FW_ACTION_.NET_FW_ACTION_ALLOW;
-                                infrCurrentINetFwRule2.Direction = NET_FW_RULE_DIRECTION_.NET_FW_RULE_DIR_IN;
-                                infrCurrentINetFwRule2.ApplicationName = Environment.ProcessPath;
-                                infrCurrentINetFwRule2.Enabled = true;
-                                infrCurrentINetFwRule2.InterfaceTypes = "All";
-                                infrCurrentINetFwRules.Add(infrCurrentINetFwRule2);
-
-                                var infrCurrentINetFwRule3 = (INetFwRule)Activator.CreateInstance(tCurrentFwRuleType)!;
-                                infrCurrentINetFwRule3.Name = FIREWALL_RULE_APP_NAME + "_OUT_UDP";
-                                infrCurrentINetFwRule3.Description = FIREWALL_RULE_APP_NAME + "_OUT_UDP";
-                                infrCurrentINetFwRule3.Protocol = 17;
-                                infrCurrentINetFwRule3.Action = NET_FW_ACTION_.NET_FW_ACTION_ALLOW;
-                                infrCurrentINetFwRule3.Direction = NET_FW_RULE_DIRECTION_.NET_FW_RULE_DIR_OUT;
-                                infrCurrentINetFwRule3.ApplicationName = Environment.ProcessPath;
-                                infrCurrentINetFwRule3.Enabled = true;
-                                infrCurrentINetFwRule3.InterfaceTypes = "All";
-                                infrCurrentINetFwRules.Add(infrCurrentINetFwRule3);
-
-                                var infrCurrentINetFwRule4 = (INetFwRule)Activator.CreateInstance(tCurrentFwRuleType)!;
-                                infrCurrentINetFwRule4.Name = FIREWALL_RULE_APP_NAME + "_IN_UDP";
-                                infrCurrentINetFwRule4.Description = FIREWALL_RULE_APP_NAME + "_IN_UDP";
-                                infrCurrentINetFwRule4.Protocol = 17;
-                                infrCurrentINetFwRule4.Action = NET_FW_ACTION_.NET_FW_ACTION_ALLOW;
-                                infrCurrentINetFwRule4.Direction = NET_FW_RULE_DIRECTION_.NET_FW_RULE_DIR_IN;
-                                infrCurrentINetFwRule4.ApplicationName = Environment.ProcessPath;
-                                infrCurrentINetFwRule4.Enabled = true;
-                                infrCurrentINetFwRule4.InterfaceTypes = "All";
-                                infrCurrentINetFwRules.Add(infrCurrentINetFwRule4);
-
-                                return true;
-                            }
-                            catch
-                            {
-                                return false;
-                            }
-                        }
-                    }
-                }
-            }
-
-            return false;
-        }
-
-        public static uint GetCRC32(byte[] byaLocalBuffer, int iLocalChecksumLength)
-        {
-            lCurrentLogger.Trace("Global.GetCRC32()".Pastel(ConsoleColor.Cyan));
-
-            var uiCurrentCRCValue = 0xFFFFFFFF;
-
-            for (var iCurrentItterator = 0; iCurrentItterator < iLocalChecksumLength; iCurrentItterator++)
-                uiCurrentCRCValue = (uiCurrentCRCValue << 8) ^ uiaDVBCRCChecksumTable[((uiCurrentCRCValue >> 24) ^ byaLocalBuffer[iCurrentItterator]) & 0xFF];
-
-            return uiCurrentCRCValue;
-        }
-
-        /// <summary>
-        /// Global.GetBytesAsInt32()
-        /// </summary>
-        /// <param name="byaLocalBuffer"></param>
-        /// <param name="bLocalReverse"></param>
-        /// <param name="iLocalStartBit"></param>
-        /// <param name="iLocalBitAmount"></param>
-        /// <returns></returns>
-        public static int GetBytesAsInt32(byte[]? byaLocalBuffer, bool bLocalReverse, int? iLocalStartBit, int? iLocalBitAmount)
-        {
-            lCurrentLogger.Trace("Global.GetBytesAsInt32()".Pastel(ConsoleColor.Cyan));
-
-            if (byaLocalBuffer == null)
-                return 0;
-
-            var baCurrentBitArray = bLocalReverse ? new BitArray(byaLocalBuffer.Reverse().ToArray()) : new BitArray(byaLocalBuffer);
-            return baCurrentBitArray.GetBitsAsInt32(iLocalStartBit, iLocalBitAmount);
-        }
-
-        /// <summary>
-        /// Global.GetBytesAsInt64()
-        /// </summary>
-        /// <param name="byaLocalBuffer"></param>
-        /// <param name="bLocalReverse"></param>
-        /// <param name="iLocalStartBit"></param>
-        /// <param name="iLocalBitAmount"></param>
-        /// <returns></returns>
-        public static long GetBytesAsInt64(byte[]? byaLocalBuffer, bool bLocalReverse, int? iLocalStartBit, int? iLocalBitAmount)
-        {
-            lCurrentLogger.Trace("Global.GetBytesAsInt64()".Pastel(ConsoleColor.Cyan));
-
-            if (byaLocalBuffer == null)
-                return 0;
-
-            var baCurrentBitArray = bLocalReverse ? new BitArray(byaLocalBuffer.Reverse().ToArray()) : new BitArray(byaLocalBuffer);
-            return baCurrentBitArray.GetBitsAsInt64(iLocalStartBit, iLocalBitAmount);
-        }
-
-        public static void GetDateFromModifiedJulianDate(int iLocalModifiedJulianDate, ref int y, ref int m, ref int d)
-        {
-            lCurrentLogger.Trace("Global.GetDateFromModifiedJulianDate()".Pastel(ConsoleColor.Cyan));
-
-            // Valid till 28.2.2100
-            int[] dm = [ 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 28 ];
-            var r = iLocalModifiedJulianDate - 51604; // 0 = 1.3.2000
-
-            if (r < 0)
-                r += 65536;
-
-            var p = r / (365 * 4 + 1);
-
-            r -= p * (365 * 4 + 1);
-            y = p * 4 + 2000;
-            p = r / 365;
-            r -= p * 365;
-            y += p;
-
-            if (p < 4)
-            {
-                for (var i = 0; i < 12; i += 1)
-                {
-                    m = i < 10 ? i + 3 : i - 9;
-
-                    if (r < dm[i])
-                    {
-                        d = r + 1;
-
-                        if (i >= 10)
-                            y += 1;
-
-                        break;
-                    }
-
-                    r -= dm[i];
-                }
-            }
-            else
-            {
-                m = 2;
-                d = 29;
-            }
-        }
-
-        public static int GetTransportStreamPayload(byte[] byaLocalTransponder)
-        {
-            lCurrentLogger.Trace("Global.GetTransportStreamPayload()".Pastel(ConsoleColor.Cyan));
-
-            if ((byaLocalTransponder[3] & 0x10) == 0)
-                return 0;
-
-            if ((byaLocalTransponder[3] & 0x20) == 0)
-                return 184;
-
-            if (byaLocalTransponder[4] > 183)
-                return 0;
-
-            return 183 - byaLocalTransponder[4];
-        }
-
-        public static bool HasTransportStreamPayload(byte[] byaLocalTransponder)
-        {
-            lCurrentLogger.Trace("Global.HasTransportStreamPayload()".Pastel(ConsoleColor.Cyan));
-
-            if ((byaLocalTransponder[3] & 0x10) == 0)
-                return false;
-
-            if ((byaLocalTransponder[3] & 0x20) == 0)
-                return true;
-
-            return byaLocalTransponder[4] <= 183;
-        }
-
-        public static int SectorLength(byte[] baLocalBuffer)
-        {
-            lCurrentLogger.Trace("Global.SectorLength()".Pastel(ConsoleColor.Cyan));
-
-            return 3 + ((baLocalBuffer[1] & 0x0F) << 8) + baLocalBuffer[2];
-        }
-
-        public static bool AllZeroOrCounted(uint[] lLocalElement, int iLocalElementCount)
-        {
-            lCurrentLogger.Trace("Global.AllZeroOrCounted()".Pastel(ConsoleColor.Cyan));
-
-            uint uiCurrentElementOrValue = 0;
-
-            for (var i = 0; i < iLocalElementCount; i++)
-            {
-                uiCurrentElementOrValue |= lLocalElement[i];
-            }
-
-            return uiCurrentElementOrValue == 0;
-        }
-
-        //public static bool HasDescriptor(byte byLocalSearchTerm, byte[] byaLocalSearchCollection, int iLocalSearchCollectionLength)
-        //{
-        //    lCurrentLogger.Trace("Global.HasDescriptor()".Pastel(ConsoleColor.Cyan));
-
-        //    for (var i = 0; i < iLocalSearchCollectionLength; i += byaLocalSearchCollection[i + 1] + 2)
-        //    {
-        //        if (byLocalSearchTerm == byaLocalSearchCollection[i])
-        //            return true;
-        //    }
-
-        //    return false;
-        //}
-
-        //public static bool HasESDescriptor(ElementaryStreamDescriptors esdLocalSearchESDescriptor, byte[] byaLocalSearchCollection)
-        //{
-        //    lCurrentLogger.Trace("Global.HasESDescriptor()".Pastel(ConsoleColor.Cyan));
-
-        //    if (byaLocalSearchCollection.Length <= 0)
-        //        return false;
-
-        //    var iCurrentESDescriptorBufferPosition = 0;
-        //    do
-        //    {
-        //        var iESDescriptorTag = GetBytesAsInt32(byaLocalSearchCollection[iCurrentESDescriptorBufferPosition..(iCurrentESDescriptorBufferPosition + 1)], true, 0, 8);
-        //        var iESDescriptorLength = GetBytesAsInt32(byaLocalSearchCollection[(iCurrentESDescriptorBufferPosition + 1)..(iCurrentESDescriptorBufferPosition + 2)], true, 0, 8);
-
-        //        if (iESDescriptorLength != 0 && (ElementaryStreamDescriptors)iESDescriptorTag == esdLocalSearchESDescriptor)
-        //            return true;
-
-        //        iCurrentESDescriptorBufferPosition += 2 + iESDescriptorLength;
-        //    }
-        //    while (iCurrentESDescriptorBufferPosition < byaLocalSearchCollection.Length);
-
-        //    return false;
-        //}
+        if (lCurrentLogger.IsTraceEnabled)
+            lCurrentLogger.Trace(strLocalMessage.Pastel(ConsoleColor.Cyan));
     }
 
-    public class IgnorePropertiesResolver(IEnumerable<string> propNamesToIgnore) : DefaultContractResolver
+    /// <summary>
+    /// Global.CurrentTimestamp()
+    /// </summary>
+    /// <returns>long</returns>
+    public static long CurrentTimestamp()
     {
-        private readonly HashSet<string?> ignoreProps = [..propNamesToIgnore];
+        LogTrace("Global.CurrentTimestamp()");
 
-        protected override JsonProperty CreateProperty(MemberInfo miLocalMemberInfo, MemberSerialization msLocalMemberSerialization)
+        return DateTimeOffset.Now.ToUnixTimeSeconds();
+    }
+
+    /// <summary>
+    /// Global.Retry()
+    /// </summary>
+    /// <param name="iLocalRetries"></param>
+    /// <param name="fLocalAction"></param>
+    /// <param name="iLocalRetriesUsed"></param>
+    /// <returns>bool</returns>
+    public static bool Retry(int iLocalRetries, Func<bool> fLocalAction, out int iLocalRetriesUsed)
+    {
+        LogTrace("Global.Retry()");
+
+        for (iLocalRetriesUsed = 0; ; iLocalRetriesUsed++)
         {
-            JsonProperty jpCurrentJsonProperty = base.CreateProperty(miLocalMemberInfo, msLocalMemberSerialization);
-            if (ignoreProps.Contains(jpCurrentJsonProperty.PropertyName))
-                jpCurrentJsonProperty.ShouldSerialize = _ => false;
-            
-            return jpCurrentJsonProperty;
+            if (fLocalAction())
+                return true;
+
+            if (iLocalRetriesUsed >= iLocalRetries || bDone)
+                return false;
+
+            Thread.Sleep(RETRY_WAITTIME);
         }
+    }
+
+    /// <summary>
+    /// Global.CreateFirewallRule()
+    /// </summary>
+    /// <returns>bool</returns>
+    public static bool CreateFirewallRule()
+    {
+        LogTrace("Global.CreateFirewallRule()");
+
+        if (!OperatingSystem.IsWindows())
+            return false;
+
+        var tCurrentFwPolicyType = Type.GetTypeFromProgID("HNetCfg.FwPolicy2", false);
+        var tCurrentFwRuleType = Type.GetTypeFromProgID("HNetCfg.FWRule", false);
+
+        if (tCurrentFwPolicyType == null || tCurrentFwRuleType == null)
+            return false;
+
+        (string strName, int iProtocol, int iDirection)[] taCurrentRules =
+        [
+            (FIREWALL_RULE_APP_NAME + "_OUT_TCP", NET_FW_IP_PROTOCOL_TCP, NET_FW_RULE_DIR_OUT),
+            (FIREWALL_RULE_APP_NAME + "_IN_TCP", NET_FW_IP_PROTOCOL_TCP, NET_FW_RULE_DIR_IN),
+            (FIREWALL_RULE_APP_NAME + "_OUT_UDP", NET_FW_IP_PROTOCOL_UDP, NET_FW_RULE_DIR_OUT),
+            (FIREWALL_RULE_APP_NAME + "_IN_UDP", NET_FW_IP_PROTOCOL_UDP, NET_FW_RULE_DIR_IN)
+        ];
+
+        try
+        {
+            dynamic dCurrentFwPolicy = Activator.CreateInstance(tCurrentFwPolicyType)!;
+            var dCurrentFwRules = dCurrentFwPolicy.Rules;
+
+            if (taCurrentRules.All(tCurrentRule => FirewallRuleExists(dCurrentFwRules, tCurrentRule.strName)))
+                return true;
+
+            foreach (var tCurrentRule in taCurrentRules)
+            {
+                dCurrentFwRules.Remove(tCurrentRule.strName);
+
+                dynamic dCurrentFwRule = Activator.CreateInstance(tCurrentFwRuleType)!;
+                dCurrentFwRule.Name = tCurrentRule.strName;
+                dCurrentFwRule.Description = tCurrentRule.strName;
+                dCurrentFwRule.Protocol = tCurrentRule.iProtocol;
+                dCurrentFwRule.Action = NET_FW_ACTION_ALLOW;
+                dCurrentFwRule.Direction = tCurrentRule.iDirection;
+                dCurrentFwRule.ApplicationName = Environment.ProcessPath;
+                dCurrentFwRule.Enabled = true;
+                dCurrentFwRule.InterfaceTypes = "All";
+                dCurrentFwRules.Add(dCurrentFwRule);
+            }
+
+            return true;
+        }
+        catch (Exception excCurrentException)
+        {
+            LogTrace($"Global.CreateFirewallRule() failed: {excCurrentException.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Global.FirewallRuleExists()
+    /// </summary>
+    /// <param name="dLocalFwRules"></param>
+    /// <param name="strLocalRuleName"></param>
+    /// <returns>bool</returns>
+    private static bool FirewallRuleExists(dynamic dLocalFwRules, string strLocalRuleName)
+    {
+        LogTrace("Global.FirewallRuleExists()");
+
+        try
+        {
+            var dCurrentFwRule = dLocalFwRules.Item(strLocalRuleName);
+            return (bool)dCurrentFwRule.Enabled && string.Equals((string)dCurrentFwRule.ApplicationName, Environment.ProcessPath, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Global.GetCRC32()
+    /// </summary>
+    /// <param name="rosLocalBuffer"></param>
+    /// <returns>uint</returns>
+    public static uint GetCRC32(ReadOnlySpan<byte> rosLocalBuffer)
+    {
+        LogTrace("Global.GetCRC32()");
+
+        var uiCurrentCRCValue = 0xFFFFFFFF;
+
+        foreach (var byCurrentByte in rosLocalBuffer)
+            uiCurrentCRCValue = (uiCurrentCRCValue << 8) ^ uiaDVBCRCChecksumTable[((uiCurrentCRCValue >> 24) ^ byCurrentByte) & 0xFF];
+
+        return uiCurrentCRCValue;
+    }
+
+    /// <summary>
+    /// Global.GetDateFromModifiedJulianDate()
+    /// </summary>
+    /// <param name="iLocalModifiedJulianDate"></param>
+    /// <returns>DateOnly</returns>
+    public static DateOnly GetDateFromModifiedJulianDate(int iLocalModifiedJulianDate)
+    {
+        LogTrace("Global.GetDateFromModifiedJulianDate()");
+
+        if (iLocalModifiedJulianDate < 51604)
+            iLocalModifiedJulianDate += 65536;
+
+        return new DateOnly(1858, 11, 17).AddDays(iLocalModifiedJulianDate);
+    }
+
+    /// <summary>
+    /// Global.GetTransportStreamPayload()
+    /// </summary>
+    /// <param name="rosLocalPacket"></param>
+    /// <returns>int</returns>
+    public static int GetTransportStreamPayload(ReadOnlySpan<byte> rosLocalPacket)
+    {
+        LogTrace("Global.GetTransportStreamPayload()");
+
+        if ((rosLocalPacket[3] & 0x10) == 0)
+            return 0;
+
+        if ((rosLocalPacket[3] & 0x20) == 0)
+            return 184;
+
+        if (rosLocalPacket[4] > 183)
+            return 0;
+
+        return 183 - rosLocalPacket[4];
+    }
+
+    /// <summary>
+    /// Global.HasTransportStreamPayload()
+    /// </summary>
+    /// <param name="rosLocalPacket"></param>
+    /// <returns>bool</returns>
+    public static bool HasTransportStreamPayload(ReadOnlySpan<byte> rosLocalPacket)
+    {
+        LogTrace("Global.HasTransportStreamPayload()");
+
+        if ((rosLocalPacket[3] & 0x10) == 0)
+            return false;
+
+        if ((rosLocalPacket[3] & 0x20) == 0)
+            return true;
+
+        return rosLocalPacket[4] <= 183;
+    }
+
+    /// <summary>
+    /// Global.SectorLength()
+    /// </summary>
+    /// <param name="rosLocalBuffer"></param>
+    /// <returns>int</returns>
+    public static int SectorLength(ReadOnlySpan<byte> rosLocalBuffer)
+    {
+        LogTrace("Global.SectorLength()");
+
+        return 3 + ((rosLocalBuffer[1] & 0x0F) << 8) + rosLocalBuffer[2];
+    }
+
+    /// <summary>
+    /// Global.AllZeroOrCounted()
+    /// </summary>
+    /// <param name="uiaLocalElements"></param>
+    /// <returns>bool</returns>
+    public static bool AllZeroOrCounted(uint[] uiaLocalElements)
+    {
+        LogTrace("Global.AllZeroOrCounted()");
+
+        return uiaLocalElements.All(uiCurrentElement => uiCurrentElement == 0);
+    }
+
+    /// <summary>
+    /// Global.FormatRTSPHost()
+    /// </summary>
+    /// <param name="strLocalHost"></param>
+    /// <returns>string</returns>
+    public static string FormatRTSPHost(string? strLocalHost)
+    {
+        LogTrace("Global.FormatRTSPHost()");
+
+        return IPAddress.TryParse(strLocalHost, out var ipaCurrentAddress) && ipaCurrentAddress.AddressFamily == AddressFamily.InterNetworkV6 ? $"[{strLocalHost}]" : strLocalHost ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Global.DecodeDVBString()
+    /// </summary>
+    /// <param name="rosLocalBuffer"></param>
+    /// <returns>string</returns>
+    public static string DecodeDVBString(ReadOnlySpan<byte> rosLocalBuffer)
+    {
+        LogTrace("Global.DecodeDVBString()");
+
+        if (rosLocalBuffer.IsEmpty)
+            return string.Empty;
+
+        Encoding eCurrentEncoding;
+        var iCurrentOffset = 1;
+        var byCurrentCharacterTable = rosLocalBuffer[0];
+
+        switch (byCurrentCharacterTable)
+        {
+            case >= CCT_ENCODING_ISO_6937:
+                eCurrentEncoding = GetISO6937Encoding();
+                iCurrentOffset = 0;
+                break;
+            case >= CCT_ENCODING_ISO_8859_5 and <= CCT_ENCODING_ISO_8859_15:
+                eCurrentEncoding = GetISO8859Encoding(byCurrentCharacterTable + 4);
+                break;
+            case CCT_ENCODING_ISO_8859_DYNAMIC_PARTS when rosLocalBuffer.Length >= 3:
+                eCurrentEncoding = GetISO8859Encoding((rosLocalBuffer[1] << 8) | rosLocalBuffer[2]);
+                iCurrentOffset = 3;
+                break;
+            case CCT_ENCODING_ISO_10646:
+                eCurrentEncoding = Encoding.BigEndianUnicode;
+                break;
+            case CCT_ENCODING_KSX_1001:
+                eCurrentEncoding = Encoding.GetEncoding("x-cp20949");
+                break;
+            case CCT_ENCODING_GB_2312:
+                eCurrentEncoding = Encoding.GetEncoding("gb2312");
+                break;
+            case CCT_ENCODING_ISO_10646_BIG5:
+                eCurrentEncoding = Encoding.GetEncoding("big5");
+                break;
+            case CCT_ENCODING_ISO_10646_UTF8:
+                eCurrentEncoding = Encoding.UTF8;
+                break;
+            case CCT_ENCODING_CUSTOM when rosLocalBuffer.Length >= 2:
+                eCurrentEncoding = GetISO6937Encoding();
+                iCurrentOffset = 2;
+                break;
+            default:
+                eCurrentEncoding = GetISO6937Encoding();
+                break;
+        }
+
+        return eCurrentEncoding.GetString(rosLocalBuffer[iCurrentOffset..]).CleanupInvalidData();
+    }
+
+    /// <summary>
+    /// Global.GetISO6937Encoding()
+    /// </summary>
+    /// <returns>Encoding</returns>
+    private static Encoding GetISO6937Encoding()
+    {
+        LogTrace("Global.GetISO6937Encoding()");
+
+        return eISO6937Encoding ??= Encoding.GetEncoding(20269);
+    }
+
+    /// <summary>
+    /// Global.GetISO8859Encoding()
+    /// </summary>
+    /// <param name="iLocalPart"></param>
+    /// <returns>Encoding</returns>
+    private static Encoding GetISO8859Encoding(int iLocalPart)
+    {
+        LogTrace("Global.GetISO8859Encoding()");
+
+        if (dieISO8859Encodings.TryGetValue(iLocalPart, out var eCurrentEncoding))
+            return eCurrentEncoding;
+
+        try
+        {
+            eCurrentEncoding = iLocalPart == 11 ? Encoding.GetEncoding(874) : Encoding.GetEncoding($"iso-8859-{iLocalPart}");
+        }
+        catch (Exception excCurrentException) when (excCurrentException is ArgumentException or NotSupportedException)
+        {
+            eCurrentEncoding = Encoding.Latin1;
+        }
+
+        dieISO8859Encodings[iLocalPart] = eCurrentEncoding;
+        return eCurrentEncoding;
+    }
+
+    /// <summary>
+    /// Global.GetISO639LanguageCode()
+    /// </summary>
+    /// <param name="strLocalLanguageCode"></param>
+    /// <returns>string</returns>
+    public static string GetISO639LanguageCode(string strLocalLanguageCode)
+    {
+        LogTrace("Global.GetISO639LanguageCode()");
+
+        return ISO639LanguageCollection.ISO639LanguagesByCode.TryGetValue(strLocalLanguageCode, out var lCurrentLanguage) ? lCurrentLanguage.ISO6393Code : "mis";
+    }
+
+    /// <summary>
+    /// Global.GetEventLanguageCode()
+    /// </summary>
+    /// <param name="strLocalLanguageCode"></param>
+    /// <returns>string</returns>
+    public static string GetEventLanguageCode(string strLocalLanguageCode)
+    {
+        LogTrace("Global.GetEventLanguageCode()");
+
+        if (dssEventLanguages.TryGetValue(strLocalLanguageCode, out var strCurrentLanguageCode))
+            return strCurrentLanguageCode;
+
+        strCurrentLanguageCode = strLocalLanguageCode.ToLowerInvariant();
+
+        if (ISO639LanguageCollection.ISO639LanguagesByCode.TryGetValue(strLocalLanguageCode, out var lCurrentLanguage) && lCurrentLanguage.ISO6392Code != null)
+        {
+            try
+            {
+                strCurrentLanguageCode = CultureInfo.GetCultureInfo(lCurrentLanguage.ISO6392Code).ThreeLetterISOLanguageName.ToLowerInvariant();
+            }
+            catch (CultureNotFoundException)
+            {
+                strCurrentLanguageCode = lCurrentLanguage.ISO6393Code;
+            }
+        }
+
+        dssEventLanguages[strLocalLanguageCode] = strCurrentLanguageCode;
+        return strCurrentLanguageCode;
     }
 }

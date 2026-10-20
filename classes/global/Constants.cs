@@ -4,7 +4,6 @@
     {
         public const string FIREWALL_RULE_APP_NAME = "KON.OctoScan.NET";
 
-        public const int MAX_ANUM = 32;
         public const int MAX_EIT_SID = 64;
         public const int WAITTIME_FOR_RTSPCOMMAND = 500;
 

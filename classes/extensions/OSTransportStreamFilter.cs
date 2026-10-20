@@ -24,15 +24,15 @@ namespace KON.OctoScan.NET
                 if (opiiCurrentOSPacketIdentifierInfo is { otsiOSTransportStreamInfo: not null } && baCurrentBuffer != null)
                 {
                     var iNetworkInformationTablePacketIdentifier = DEFAULT_PID_NIT;
-                    var iSectionLength = (((baCurrentBuffer[1] & 0x03) << 8) | baCurrentBuffer[2]) + 3;
+                    var iSectionLength = baCurrentBuffer.ToDVBLengthAsInteger(1) + 3;
 
-                    otsfLocalOSTransportStreamFilter.iTableExtension = (ushort)((baCurrentBuffer[3] << 8) | baCurrentBuffer[4]);
+                    otsfLocalOSTransportStreamFilter.iTableExtension = (ushort)baCurrentBuffer.ToUShortAsInteger(3);
                     opiiCurrentOSPacketIdentifierInfo.otsiOSTransportStreamInfo.iTransportStreamID = otsfLocalOSTransportStreamFilter.iTableExtension;
 
                     for (var i = 8; i < iSectionLength - 4; i += 4)
                     {
-                        var iProgramNumber = (baCurrentBuffer[i] << 8) | baCurrentBuffer[i + 1];
-                        var iPacketIdentifier = GetBytesAsInt32(baCurrentBuffer[(i + 2)..(i + 4)], true, 0, 13);
+                        var iProgramNumber = baCurrentBuffer.ToUShortAsInteger(i);
+                        var iPacketIdentifier = ((baCurrentBuffer[i + 2] & 0x1F) << 8) | baCurrentBuffer[i + 3];
 
                         if (iProgramNumber != 0)
                         {
@@ -68,17 +68,21 @@ namespace KON.OctoScan.NET
                                 break;
 
                             DVBTableSection dvbtTableIdentifier = (DVBTableSection)byaCurrentBuffer[iCurrentBufferPosition];
-                            var iSectionLength = GetBytesAsInt32(byaCurrentBuffer[(iCurrentBufferPosition + 1)..(iCurrentBufferPosition + 3)], true, 0, 10) + 3;
+
+                            var iSectionLength = byaCurrentBuffer.ToDVBLengthAsInteger(iCurrentBufferPosition + 1) + 3;
                             lCurrentLogger.Trace($"Section Length: 0x{iSectionLength:X2} ({iSectionLength})".Pastel(ConsoleColor.Cyan));
-                            var iTableIDExtension = GetBytesAsInt32(byaCurrentBuffer[(iCurrentBufferPosition + 3)..(iCurrentBufferPosition + 5)], true, 0, 16);
+                            var iTableIDExtension = byaCurrentBuffer.ToUShortAsInteger(iCurrentBufferPosition + 3);
                             lCurrentLogger.Trace($"SID (Table ID Extension): 0x{iTableIDExtension:X4} ({iTableIDExtension})".Pastel(ConsoleColor.Cyan));
-                            var iVersionNumber = GetBytesAsInt32(byaCurrentBuffer[(iCurrentBufferPosition + 5)..(iCurrentBufferPosition + 6)], true, 1, 5);
+
+                            byte byVersionByte = byaCurrentBuffer[iCurrentBufferPosition + 5];
+                            var iVersionNumber = (byVersionByte & 0x3E) >> 1; // Bits 5-1
                             lCurrentLogger.Trace($"Version Number: 0x{iVersionNumber:X2} ({iVersionNumber})".Pastel(ConsoleColor.Cyan));
-                            var iCurrentNextIndicator = GetBytesAsInt32(byaCurrentBuffer[(iCurrentBufferPosition + 5)..(iCurrentBufferPosition + 6)], true, 0, 1);
+                            var iCurrentNextIndicator = byVersionByte & 0x01;  // Bit 0
                             lCurrentLogger.Trace($"Current/Next Indicator: 0x{iCurrentNextIndicator:X2} ({iCurrentNextIndicator})".Pastel(ConsoleColor.Cyan));
-                            var iSectionNumber = GetBytesAsInt32(byaCurrentBuffer[(iCurrentBufferPosition + 6)..(iCurrentBufferPosition + 7)], true, 0, 8);
+
+                            var iSectionNumber = byaCurrentBuffer[iCurrentBufferPosition + 6];
                             lCurrentLogger.Trace($"Section Number: 0x{iSectionNumber:X2} ({iSectionNumber})".Pastel(ConsoleColor.Cyan));
-                            var iLastSectionNumber = GetBytesAsInt32(byaCurrentBuffer[(iCurrentBufferPosition + 7)..(iCurrentBufferPosition + 8)], true, 0, 8);
+                            var iLastSectionNumber = byaCurrentBuffer[iCurrentBufferPosition + 7];
                             lCurrentLogger.Trace($"Last Section Number: 0x{iLastSectionNumber:X2} ({iLastSectionNumber})".Pastel(ConsoleColor.Cyan));
 
                             if (dvbtTableIdentifier == DVBTableSection.PMT)
@@ -89,35 +93,38 @@ namespace KON.OctoScan.NET
                                 var osCurrentOSService = opiiCurrentOSPacketIdentifierInfo.otsiOSTransportStreamInfo?.ostOSScanTransponder?.otiOSTransponderInfo?.GetService(iTableIDExtension);
                                 if (osCurrentOSService != null)
                                 {
-                                    var iProgramClockReferencePacketIdentifier = GetBytesAsInt32(byaCurrentBuffer[(iCurrentBufferPosition + 8)..(iCurrentBufferPosition + 10)], true, 0, 13);
+                                    var iProgramClockReferencePacketIdentifier = ((byaCurrentBuffer[iCurrentBufferPosition + 8] & 0x1F) << 8) | byaCurrentBuffer[iCurrentBufferPosition + 9];
                                     lCurrentLogger.Trace($"PCRPID: 0x{iProgramClockReferencePacketIdentifier:X2} ({iProgramClockReferencePacketIdentifier})".Pastel(ConsoleColor.Cyan));
 
                                     osCurrentOSService.iProgramClockReferencePacketIdentifier = iProgramClockReferencePacketIdentifier;
                                     osCurrentOSService.iProgramMapTable = (ushort)opiiCurrentOSPacketIdentifierInfo.iPacketID;
                                     osCurrentOSService.iVideoPacketIdentifier = 0;
                                     osCurrentOSService.byVideoPacketIdentifierStreamType = 0;
-                                    osCurrentOSService.byAudioChannels = 0;
-                                    osCurrentOSService.iaAudioPacketIdentifiers = new int[MAX_ANUM];
-                                    osCurrentOSService.byaAudioPacketIdentifiersStreamType = new byte[MAX_ANUM];
-                                    osCurrentOSService.saAudioPacketIdentifiersLanguage = new string[MAX_ANUM];
+                                    osCurrentOSService.liAudioPacketIdentifiers = [];
+                                    osCurrentOSService.lbAudioPacketIdentifiersStreamType = [];
+                                    osCurrentOSService.lsAudioPacketIdentifiersLanguage = [];
 
-                                    var iProgramInfoLength = GetBytesAsInt32(byaCurrentBuffer[(iCurrentBufferPosition + 10)..(iCurrentBufferPosition + 12)], true, 0, 10);
+                                    var iProgramInfoLength = byaCurrentBuffer.ToDVBLengthAsInteger(iCurrentBufferPosition + 10);
                                     lCurrentLogger.Trace($"Program Info Length: 0x{iProgramInfoLength:X2} ({iProgramInfoLength})".Pastel(ConsoleColor.Cyan));
+
                                     var iCurrentDescriptorBufferPosition = iCurrentBufferPosition + 12;
                                     if (iProgramInfoLength != 0)
                                     {
-                                        var baProgramDescriptorData = byaCurrentBuffer[iCurrentDescriptorBufferPosition..(iCurrentDescriptorBufferPosition + iProgramInfoLength)];
-                                        lCurrentLogger.Trace($"Program Descriptor Data: 0x{BitConverter.ToString(baProgramDescriptorData).Replace("-", string.Empty)}".Pastel(ConsoleColor.Cyan));
+                                        if (lCurrentLogger.IsTraceEnabled)
+                                            lCurrentLogger.Trace($"Program Descriptor Data: 0x{BitConverter.ToString(byaCurrentBuffer, iCurrentDescriptorBufferPosition, iProgramInfoLength).Replace("-", string.Empty)}".Pastel(ConsoleColor.Cyan));
+                                        
                                         iCurrentDescriptorBufferPosition += iProgramInfoLength;
                                     }
 
-                                    while (iCurrentDescriptorBufferPosition < iSectionLength - 4)
+                                    while (iCurrentDescriptorBufferPosition < iCurrentBufferPosition + iSectionLength - 4)
                                     {
-                                        var iStreamType = GetBytesAsInt32(byaCurrentBuffer[iCurrentDescriptorBufferPosition..(iCurrentDescriptorBufferPosition + 1)], true, 0, 8);
+                                        var iStreamType = byaCurrentBuffer[iCurrentDescriptorBufferPosition]; // 1 Byte
                                         lCurrentLogger.Trace($"Stream Type: 0x{iStreamType:X2} ({((MPEG2TSStreamType)iStreamType).ToString()})".Pastel(ConsoleColor.Cyan));
-                                        var iElementaryPID = GetBytesAsInt32(byaCurrentBuffer[(iCurrentDescriptorBufferPosition + 1)..(iCurrentDescriptorBufferPosition + 3)], true, 0, 13);
+
+                                        var iElementaryPID = ((byaCurrentBuffer[iCurrentDescriptorBufferPosition + 1] & 0x1F) << 8) | byaCurrentBuffer[iCurrentDescriptorBufferPosition + 2];
                                         lCurrentLogger.Trace($"Elementary PID: 0x{iElementaryPID:X2} ({iElementaryPID})".Pastel(ConsoleColor.Cyan));
-                                        var iESInfoLength = GetBytesAsInt32(byaCurrentBuffer[(iCurrentDescriptorBufferPosition + 3)..(iCurrentDescriptorBufferPosition + 5)], true, 0, 10);
+
+                                        var iESInfoLength = byaCurrentBuffer.ToDVBLengthAsInteger(iCurrentDescriptorBufferPosition + 3);
                                         lCurrentLogger.Trace($"ES Info Length: 0x{iESInfoLength:X2} ({iESInfoLength})".Pastel(ConsoleColor.Cyan));
 
                                         var bAudioInformationExisting = false;
@@ -134,7 +141,7 @@ namespace KON.OctoScan.NET
                                             case MPEG2TSStreamType.Private_ES_VC1_Video:
                                             {
                                                 osCurrentOSService.iVideoPacketIdentifier = iElementaryPID;
-                                                osCurrentOSService.byVideoPacketIdentifierStreamType = (byte)iStreamType;
+                                                osCurrentOSService.byVideoPacketIdentifierStreamType = iStreamType;
                                                 break;
                                             }
                                             case MPEG2TSStreamType.ISO_IEC_11172_3_MPEG1_Audio:
@@ -144,6 +151,7 @@ namespace KON.OctoScan.NET
                                             case MPEG2TSStreamType.A52_AC3_Audio:
                                             case MPEG2TSStreamType.HDMV_DTS_Audio:
                                             case MPEG2TSStreamType.LPCM_TrueHD_Audio:
+                                            case MPEG2TSStreamType.ITU_T_Rec_H_222_0_ISO_IEC_13818_1_PES_Audio_Data:
                                             {
                                                 bAudioInformationExisting = true;
                                                 break;
@@ -151,11 +159,13 @@ namespace KON.OctoScan.NET
                                         }
 
                                         var iCurrentESDescriptorBufferPosition = iCurrentDescriptorBufferPosition + 5;
-                                        do
+                                        int iESDescriptorEnd = iCurrentDescriptorBufferPosition + 5 + iESInfoLength;
+
+                                        while (iCurrentESDescriptorBufferPosition < iESDescriptorEnd)
                                         {
-                                            var iESDescriptorTag = GetBytesAsInt32(byaCurrentBuffer[iCurrentESDescriptorBufferPosition..(iCurrentESDescriptorBufferPosition + 1)], true, 0, 8);
+                                            var iESDescriptorTag = byaCurrentBuffer[iCurrentESDescriptorBufferPosition];
                                             lCurrentLogger.Trace($"ES Descriptor Tag: 0x{iESDescriptorTag:X2} ({((ElementaryStreamDescriptors)iESDescriptorTag).ToString()})".Pastel(ConsoleColor.Cyan));
-                                            var iESDescriptorLength = GetBytesAsInt32(byaCurrentBuffer[(iCurrentESDescriptorBufferPosition + 1)..(iCurrentESDescriptorBufferPosition + 2)], true, 0, 8);
+                                            var iESDescriptorLength = byaCurrentBuffer[iCurrentESDescriptorBufferPosition + 1];
 
                                             if (iESDescriptorLength != 0)
                                             {
@@ -178,13 +188,11 @@ namespace KON.OctoScan.NET
                                                     }
                                                     case ElementaryStreamDescriptors.ISO_639_language_descriptor:
                                                     {
-                                                        var baISO639LanguageCode = byaCurrentBuffer[(iCurrentESDescriptorBufferPosition + 2)..(iCurrentESDescriptorBufferPosition + 2 + iESDescriptorLength - 1)];
-                                                        var strISO639LanguageCode = Encoding.UTF8.GetString(baISO639LanguageCode);
+                                                        var strISO639LanguageCode = Encoding.UTF8.GetString(byaCurrentBuffer, iCurrentESDescriptorBufferPosition + 2, 3);
                                                         var lCurrentLanguage = ISO639LanguageCollection.AllISO639Languages.FirstOrDefault(llCurrentLanguage => llCurrentLanguage.ISO6393Code.ToLower().Equals(strISO639LanguageCode.ToLower(), StringComparison.InvariantCultureIgnoreCase));
-
                                                         strISO639LanguageCode = lCurrentLanguage != null ? lCurrentLanguage.ISO6393Code : ISO639LanguageCollection.AllISO639Languages.First(llCurrentLanguage => llCurrentLanguage.ISO6393Code.ToLower().Equals("mis", StringComparison.InvariantCultureIgnoreCase)).ISO6393Code;
                                                         lCurrentLogger.Trace($"ISO639 Language Code: 0x{strISO639LanguageCode.ToHexString()} ({strISO639LanguageCode})".Pastel(ConsoleColor.Cyan));
-                                                        osCurrentOSService.saAudioPacketIdentifiersLanguage[osCurrentOSService.byAudioChannels] = strISO639LanguageCode;
+                                                        osCurrentOSService.lsAudioPacketIdentifiersLanguage.Add(strISO639LanguageCode);
                                                         break;
                                                     }
                                                 }
@@ -192,13 +200,17 @@ namespace KON.OctoScan.NET
 
                                             iCurrentESDescriptorBufferPosition += 2 + iESDescriptorLength;
                                         }
-                                        while (iCurrentESDescriptorBufferPosition < iCurrentDescriptorBufferPosition + 5 + iESInfoLength);
 
-                                        if (bAudioInformationExisting && osCurrentOSService.byAudioChannels < MAX_ANUM)
+                                        if (bAudioInformationExisting)
                                         {
-                                            osCurrentOSService.iaAudioPacketIdentifiers[osCurrentOSService.byAudioChannels] = iElementaryPID;
-                                            osCurrentOSService.byaAudioPacketIdentifiersStreamType[osCurrentOSService.byAudioChannels] = (byte)iStreamType;
-                                            osCurrentOSService.byAudioChannels++;
+                                            osCurrentOSService.liAudioPacketIdentifiers.Add(iElementaryPID);
+                                            osCurrentOSService.lbAudioPacketIdentifiersStreamType.Add(iStreamType);
+
+                                            if (osCurrentOSService.iTeletextPacketIdentifier != 0)
+                                                osCurrentOSService.liAudioPacketIdentifiers.Remove(osCurrentOSService.iTeletextPacketIdentifier);
+
+                                            if (osCurrentOSService.iSubtitlePacketIdentifier != 0)
+                                                osCurrentOSService.liAudioPacketIdentifiers.Remove(osCurrentOSService.iSubtitlePacketIdentifier);
                                         }
 
                                         iCurrentDescriptorBufferPosition += 5 + iESInfoLength;
@@ -208,11 +220,11 @@ namespace KON.OctoScan.NET
                                 }
                             }
 
-                            var iCRC32 = GetBytesAsInt64(byaCurrentBuffer[(iCurrentBufferPosition + iSectionLength - 4)..(iCurrentBufferPosition + iSectionLength)], true, 0, 32);
+                            int iCrcIndex = iCurrentBufferPosition + iSectionLength - 4;
+                            long iCRC32 = ((long)byaCurrentBuffer[iCrcIndex] << 24) | ((long)byaCurrentBuffer[iCrcIndex + 1] << 16) | ((long)byaCurrentBuffer[iCrcIndex + 2] << 8) | byaCurrentBuffer[iCrcIndex + 3];
                             lCurrentLogger.Trace($"CRC32: 0x{iCRC32:X8} ({iCRC32})".Pastel(ConsoleColor.Cyan));
-                            var baCalculatedCRC32 = GetBytesAsInt64(crc32CurrentCalculatedCRC32.ComputeHash(byaCurrentBuffer[iCurrentBufferPosition..(iCurrentBufferPosition + iSectionLength - 4)]), false, 0, 32);
+                            long baCalculatedCRC32 = BitConverter.ToInt32(crc32CurrentCalculatedCRC32.ComputeHash(byaCurrentBuffer, iCurrentBufferPosition, iSectionLength - 4), 0);
                             lCurrentLogger.Trace($"Calculated CRC32: 0x{baCalculatedCRC32:X8} ({baCalculatedCRC32})".Pastel(ConsoleColor.Cyan));
-
                             iCurrentBufferPosition += iSectionLength;
                         }
                     }
@@ -228,68 +240,83 @@ namespace KON.OctoScan.NET
                 var opiiCurrentOSPacketIdentifierInfo = otsfLocalOSTransportStreamFilter.opiiOSPacketIdentifierInfo;
                 var osiCurrentOSScanIP = opiiCurrentOSPacketIdentifierInfo?.otsiOSTransportStreamInfo?.ostOSScanTransponder?.osiOSScanIP;
                 var byaCurrentBuffer = opiiCurrentOSPacketIdentifierInfo?.byaBuffer;
-                var usCurrentBufferStringLength = ToByteAsInteger(byaCurrentBuffer?[1..]) + 3;
-                var usCurrentNetworkIdentifier = ToUShortAsInteger(byaCurrentBuffer?[3..]);
-                var usCurrentNetworkDataLength = ToByteAsInteger(byaCurrentBuffer?[8..]);
-                var usCurrentTransportStreamDataPosition = 10 + usCurrentNetworkDataLength;
 
                 if (opiiCurrentOSPacketIdentifierInfo is { otsiOSTransportStreamInfo.ostOSScanTransponder.otiOSTransponderInfo: not null } && byaCurrentBuffer != null)
                 {
+                    var usCurrentBufferStringLength = byaCurrentBuffer.ToDVBLengthAsInteger(1) + 3;
+                    var usCurrentNetworkIdentifier = byaCurrentBuffer.ToUShortAsInteger(3);
+                    var usCurrentNetworkDataLength = byaCurrentBuffer.ToDVBLengthAsInteger(8);
+                    var usCurrentTransportStreamDataPosition = 10 + usCurrentNetworkDataLength;
+
                     if ((byaCurrentBuffer[1] & 0x80) != 0)
                         usCurrentBufferStringLength -= 4;
 
                     if (opiiCurrentOSPacketIdentifierInfo.otsiOSTransportStreamInfo.ostOSScanTransponder.otiOSTransponderInfo.bUseNetworkInformationTable)
                     {
-                        int usCurrentTableDataLength;
+                        int iCurrentTableDataLength;
 
-                        for (var iTransponderInfoItterator = usCurrentTransportStreamDataPosition + 2; iTransponderInfoItterator < usCurrentBufferStringLength; iTransponderInfoItterator += usCurrentTableDataLength)
+                        for (var iTransponderInfoItterator = usCurrentTransportStreamDataPosition + 2; iTransponderInfoItterator < usCurrentBufferStringLength; iTransponderInfoItterator += 6 + iCurrentTableDataLength)
                         {
                             var otiCurrentOSTransponderInfo = new OSTransponderInfo
                             {
-                                iTransportStreamID = ToUShortAsInteger(byaCurrentBuffer[iTransponderInfoItterator..]),
-                                iOriginalNetworkID = ToUShortAsInteger(byaCurrentBuffer[(iTransponderInfoItterator + 2)..]),
+                                iTransportStreamID = byaCurrentBuffer.ToUShortAsInteger(iTransponderInfoItterator),
+                                iOriginalNetworkID = byaCurrentBuffer.ToUShortAsInteger(iTransponderInfoItterator + 2),
                                 iNetworkID = usCurrentNetworkIdentifier,
                                 bUseNetworkInformationTable = opiiCurrentOSPacketIdentifierInfo.otsiOSTransportStreamInfo.ostOSScanTransponder.otiOSTransponderInfo.bUseNetworkInformationTable,
                                 bScanEventInformationTable = opiiCurrentOSPacketIdentifierInfo.otsiOSTransportStreamInfo.ostOSScanTransponder.otiOSTransponderInfo.bScanEventInformationTable
                             };
 
-                            usCurrentTableDataLength = ToByteAsInteger(byaCurrentBuffer[(iTransponderInfoItterator + 4)..]);
-                            iTransponderInfoItterator += 6;
+                            iCurrentTableDataLength = byaCurrentBuffer.ToDVBLengthAsInteger(iTransponderInfoItterator + 4);
+                            int iDescriptorStart = iTransponderInfoItterator + 6;
+                            int iDescriptorEnd = iDescriptorStart + iCurrentTableDataLength;
 
-                            switch (byaCurrentBuffer[iTransponderInfoItterator])
+                            int iSubDescriptorItterator = iDescriptorStart;
+                            while (iSubDescriptorItterator < iDescriptorEnd)
                             {
-                                case 0x43:
-                                {
-                                    otiCurrentOSTransponderInfo.iFrequency = GetBCD(byaCurrentBuffer[(iTransponderInfoItterator + 2)..], 8) / 100;
-                                    otiCurrentOSTransponderInfo.iFrequencyFraction = 0;
-                                    otiCurrentOSTransponderInfo.iPosition = GetBCD(byaCurrentBuffer[(iTransponderInfoItterator + 6)..], 4);
-                                    otiCurrentOSTransponderInfo.iSymbolRate = GetBCD(byaCurrentBuffer[(iTransponderInfoItterator + 9)..], 7) / 10;
-                                    otiCurrentOSTransponderInfo.iEAST = (byaCurrentBuffer[iTransponderInfoItterator + 8] & 0x80) >> 7;
-                                    otiCurrentOSTransponderInfo.iPolarisation = 1 ^ ((byaCurrentBuffer[iTransponderInfoItterator + 8] & 0x60) >> 5);
-                                    otiCurrentOSTransponderInfo.iRollOff = (byaCurrentBuffer[iTransponderInfoItterator + 8] & 0x18) >> 3;
-                                    otiCurrentOSTransponderInfo.iType = otiCurrentOSTransponderInfo.iModulationSystem = ((byaCurrentBuffer[iTransponderInfoItterator + 8] & 0x04) >> 2) != 0 ? 6 : 5;
-                                    otiCurrentOSTransponderInfo.iModulationType = byaCurrentBuffer[iTransponderInfoItterator + 8] & 0x03;
-                                    otiCurrentOSTransponderInfo.iFEC = byaCurrentBuffer[iTransponderInfoItterator + 12] & 0x0f;
-                                    otiCurrentOSTransponderInfo.iSource = opiiCurrentOSPacketIdentifierInfo.otsiOSTransportStreamInfo.ostOSScanTransponder.otiOSTransponderInfo.iSource;
-                                    osiCurrentOSScanIP?.AddTransponderInfo(otiCurrentOSTransponderInfo);
+                                byte byDescriptorTag = byaCurrentBuffer[iSubDescriptorItterator];
+                                byte byDescriptorLength = byaCurrentBuffer[iSubDescriptorItterator + 1];
 
-                                    break;
-                                }
-                                case 0x44:
+                                switch (byDescriptorTag)
                                 {
-                                    var iCurrentFrequency = GetBCD(byaCurrentBuffer[(iTransponderInfoItterator + 2)..], 8);
-                                    otiCurrentOSTransponderInfo.iFrequency = iCurrentFrequency / 10000;
-                                    otiCurrentOSTransponderInfo.iFrequencyFraction = iCurrentFrequency % 10000;
-                                    otiCurrentOSTransponderInfo.iSymbolRate = GetBCD(byaCurrentBuffer[(iTransponderInfoItterator + 9)..], 7) / 10;
-                                    otiCurrentOSTransponderInfo.iModulationType = byaCurrentBuffer[iTransponderInfoItterator + 8];
-                                    otiCurrentOSTransponderInfo.iModulationSystem = 1;
-                                    otiCurrentOSTransponderInfo.iType = 1;
+                                    case 0x43: // Satellite Delivery System Descriptor
+                                    {
+                                        otiCurrentOSTransponderInfo.iFrequency = byaCurrentBuffer.ToBCDAsInteger(iSubDescriptorItterator + 2, 8) / 100;
+                                        otiCurrentOSTransponderInfo.iFrequencyFraction = 0;
+                                        otiCurrentOSTransponderInfo.iPosition = byaCurrentBuffer.ToBCDAsInteger(iSubDescriptorItterator + 6, 4);
+                                        otiCurrentOSTransponderInfo.iSymbolRate = byaCurrentBuffer.ToBCDAsInteger(iSubDescriptorItterator + 9, 7) / 10;
 
-                                    if (otiCurrentOSTransponderInfo.iFrequency is >= 50 and <= 1000 && otiCurrentOSTransponderInfo.iSymbolRate is >= 1000 and <= 7100 && otiCurrentOSTransponderInfo.iModulationSystem is >= 1 and <= 5)
+                                        byte byFlagsByte = byaCurrentBuffer[iSubDescriptorItterator + 8];
+                                        otiCurrentOSTransponderInfo.iEAST = (byFlagsByte & 0x80) >> 7;
+                                        otiCurrentOSTransponderInfo.iPolarisation = 1 ^ ((byFlagsByte & 0x60) >> 5);
+                                        otiCurrentOSTransponderInfo.iRollOff = (byFlagsByte & 0x18) >> 3;
+                                        otiCurrentOSTransponderInfo.iType = otiCurrentOSTransponderInfo.iModulationSystem = ((byFlagsByte & 0x04) >> 2) != 0 ? 6 : 5;
+                                        otiCurrentOSTransponderInfo.iModulationType = byFlagsByte & 0x03;
+
+                                        otiCurrentOSTransponderInfo.iFEC = byaCurrentBuffer[iSubDescriptorItterator + 12] & 0x0F;
+                                        otiCurrentOSTransponderInfo.iSource = opiiCurrentOSPacketIdentifierInfo.otsiOSTransportStreamInfo.ostOSScanTransponder.otiOSTransponderInfo.iSource;
+
                                         osiCurrentOSScanIP?.AddTransponderInfo(otiCurrentOSTransponderInfo);
 
-                                    break;
+                                        break;
+                                    }
+                                    case 0x44: // Cable Delivery System Descriptor
+                                    {
+                                        int iCurrentFrequency = byaCurrentBuffer.ToBCDAsInteger(iSubDescriptorItterator + 2, 8);
+                                        otiCurrentOSTransponderInfo.iFrequency = iCurrentFrequency / 10000;
+                                        otiCurrentOSTransponderInfo.iFrequencyFraction = iCurrentFrequency % 10000;
+                                        otiCurrentOSTransponderInfo.iSymbolRate = byaCurrentBuffer.ToBCDAsInteger(iSubDescriptorItterator + 9, 7) / 10;
+                                        otiCurrentOSTransponderInfo.iModulationType = byaCurrentBuffer[iSubDescriptorItterator + 8];
+                                        otiCurrentOSTransponderInfo.iModulationSystem = 1;
+                                        otiCurrentOSTransponderInfo.iType = 1;
+
+                                        if (otiCurrentOSTransponderInfo.iFrequency is >= 50 and <= 1000 && otiCurrentOSTransponderInfo.iSymbolRate is >= 1000 and <= 7100 && otiCurrentOSTransponderInfo.iModulationSystem is >= 1 and <= 5)
+                                            osiCurrentOSScanIP?.AddTransponderInfo(otiCurrentOSTransponderInfo);
+                                        
+                                        break;
+                                    }
                                 }
+
+                                iSubDescriptorItterator += 2 + byDescriptorLength;
                             }
                         }
                     }
@@ -304,8 +331,8 @@ namespace KON.OctoScan.NET
 
                 var opiiCurrentOSPacketIdentifierInfo = otsfLocalOSTransportStreamFilter.opiiOSPacketIdentifierInfo;
                 var byaCurrentBuffer = opiiCurrentOSPacketIdentifierInfo?.byaBuffer;
-                var iCurrentTransportStreamID = ToUShortAsInteger(byaCurrentBuffer?[3..]);
-                var iCurrentOriginalNetworkID = ToUShortAsInteger(byaCurrentBuffer?[8..]);
+                var iCurrentTransportStreamID = byaCurrentBuffer.ToUShortAsInteger(3);
+                var iCurrentOriginalNetworkID = byaCurrentBuffer.ToUShortAsInteger(8);
 
                 if (byaCurrentBuffer != null)
                 {
@@ -313,17 +340,22 @@ namespace KON.OctoScan.NET
 
                     for (var iCurrentServicePosition = 11; iCurrentServicePosition < opiiCurrentOSPacketIdentifierInfo?.iBufferLength - 4; iCurrentServicePosition += iCurrentDescriptorsLength)
                     {
-                        var iCurrentServiceID = ToUShortAsInteger(byaCurrentBuffer?[iCurrentServicePosition..(iCurrentServicePosition + 2)]);
-                        iCurrentDescriptorsLength = ToByteAsInteger(byaCurrentBuffer?[(iCurrentServicePosition + 3)..(iCurrentServicePosition + 5)]) + 5;
+                        var iCurrentServiceID = byaCurrentBuffer.ToUShortAsInteger(iCurrentServicePosition);
+                        iCurrentDescriptorsLength = byaCurrentBuffer.ToDVBLengthAsInteger(iCurrentServicePosition + 3) + 5;
                         var osCurrentOSService = opiiCurrentOSPacketIdentifierInfo?.otsiOSTransportStreamInfo?.ostOSScanTransponder?.otiOSTransponderInfo?.GetService(iCurrentServiceID);
 
                         if (osCurrentOSService != null)
                         {
                             osCurrentOSService.iOriginalNetworkID = iCurrentOriginalNetworkID;
                             osCurrentOSService.iTransportStreamID = iCurrentTransportStreamID;
-                            osCurrentOSService.iEventInformationTableSchedule = (byaCurrentBuffer![iCurrentServicePosition + 2] & 0x02) >> 1;
-                            osCurrentOSService.iEventInformationTablePresentFollowing = byaCurrentBuffer[iCurrentServicePosition + 2] & 0x01;
-                            osCurrentOSService.iConditionalAccessMode = (byaCurrentBuffer[iCurrentServicePosition + 3] & 0x10) >> 4;
+
+                            var byEitFlagsByte = byaCurrentBuffer[iCurrentServicePosition + 2];
+                            osCurrentOSService.iEventInformationTableSchedule = (byEitFlagsByte & 0x02) >> 1;
+                            osCurrentOSService.iEventInformationTablePresentFollowing = byEitFlagsByte & 0x01;
+
+                            var byStatusFlagsByte = byaCurrentBuffer[iCurrentServicePosition + 3];
+                            osCurrentOSService.iConditionalAccessMode = (byStatusFlagsByte & 0x10) >> 4;
+                            osCurrentOSService.iRunningStatus = (byStatusFlagsByte & 0xE0) >> 5;
 
                             iServices += 1;
 
@@ -652,10 +684,11 @@ namespace KON.OctoScan.NET
                 if (byaCurrentBuffer != null)
                 {
                     var bCurrentTableID = byaCurrentBuffer[0];
-                    var iCurrentSectionLength = ToByteAsInteger(byaCurrentBuffer[1..3]) + 3;
-                    var iCurrentServiceID = ToUShortAsInteger(byaCurrentBuffer[3..5]);
-                    var iCurrentTransportStreamID = ToUShortAsInteger(byaCurrentBuffer[8..10]);
-                    var iCurrentOriginalNetworkID = ToUShortAsInteger(byaCurrentBuffer[10..12]);
+
+                    var iCurrentSectionLength = byaCurrentBuffer.ToDVBLengthAsInteger(1) + 3;
+                    var iCurrentServiceID = byaCurrentBuffer.ToUShortAsInteger(3);
+                    var iCurrentTransportStreamID = byaCurrentBuffer.ToUShortAsInteger(8);
+                    var iCurrentOriginalNetworkID = byaCurrentBuffer.ToUShortAsInteger(10);
                     var osCurrentOSService = opiiCurrentOSPacketIdentifierInfo?.otsiOSTransportStreamInfo?.ostOSScanTransponder?.otiOSTransponderInfo?.GetService(iCurrentServiceID);
                     int iCurrentTableDataLengthLimit;
 
@@ -664,17 +697,22 @@ namespace KON.OctoScan.NET
 
                     if (bLocalDoRefresh && osCurrentOSService != null)
                     {
-                        OSList<OSEvent> oloeOSListOSEventToRemove = [];
+                        using var enumerator = osCurrentOSService.oloeOSListOSEvent.GetEnumerator();
 
-                        foreach (var oeCurrentOSEvent in osCurrentOSService.oloeOSListOSEvent.Where(oeCurrentOSEvent => oeCurrentOSEvent.bTableID == bCurrentTableID))
+                        if (enumerator.MoveNext())
                         {
-                            oloeOSListOSEventToRemove.Add(oeCurrentOSEvent);
-                        }
+                            var hasNext = true;
+                            while (hasNext)
+                            {
+                                var currentEvent = enumerator.Current;
+                                hasNext = enumerator.MoveNext();
 
-                        foreach (var oeCurrentOSEvent in oloeOSListOSEventToRemove)
-                        {
-                            osCurrentOSService.oloeOSListOSEvent.Remove(oeCurrentOSEvent);
-                            iEITEventsDeleted += 1;
+                                if (currentEvent.bTableID != bCurrentTableID) 
+                                    continue;
+                                
+                                osCurrentOSService.oloeOSListOSEvent.Remove(currentEvent);
+                                iEITEventsDeleted += 1;
+                            }
                         }
                     }
 
@@ -690,17 +728,18 @@ namespace KON.OctoScan.NET
                             iServiceID = iCurrentServiceID,
                             iTransportStreamID = iCurrentTransportStreamID,
                             iOriginalNetworkID = iCurrentOriginalNetworkID,
-                            iEventID = ToUShortAsInteger(byaCurrentBuffer[(iCurrentItterator + 0)..]),
-                            iModifiedJulianDate = ToUShortAsInteger(byaCurrentBuffer[(iCurrentItterator + 2)..]),
-                            bStartHour = Convert.ToByte(GetBCD(byaCurrentBuffer[(iCurrentItterator + 4)..], 2)),
-                            bStartMinute = Convert.ToByte(GetBCD(byaCurrentBuffer[(iCurrentItterator + 5)..], 2)),
-                            bStartSecond = Convert.ToByte(GetBCD(byaCurrentBuffer[(iCurrentItterator + 6)..], 2)),
-                            bDurationHour = Convert.ToByte(GetBCD(byaCurrentBuffer[(iCurrentItterator + 7)..], 2)),
-                            bDurationMinute = Convert.ToByte(GetBCD(byaCurrentBuffer[(iCurrentItterator + 8)..], 2)),
-                            bDurationSecond = Convert.ToByte(GetBCD(byaCurrentBuffer[(iCurrentItterator + 9)..], 2))
+                            iEventID = byaCurrentBuffer.ToUShortAsInteger(iCurrentItterator),
+                            iModifiedJulianDate = byaCurrentBuffer.ToUShortAsInteger(iCurrentItterator + 2),
+
+                            bStartHour = Convert.ToByte(byaCurrentBuffer.ToBCDAsInteger(iCurrentItterator + 4, 2)),
+                            bStartMinute = Convert.ToByte(byaCurrentBuffer.ToBCDAsInteger(iCurrentItterator + 5, 2)),
+                            bStartSecond = Convert.ToByte(byaCurrentBuffer.ToBCDAsInteger(iCurrentItterator + 6, 2)),
+                            bDurationHour = Convert.ToByte(byaCurrentBuffer.ToBCDAsInteger(iCurrentItterator + 7, 2)),
+                            bDurationMinute = Convert.ToByte(byaCurrentBuffer.ToBCDAsInteger(iCurrentItterator + 8, 2)),
+                            bDurationSecond = Convert.ToByte(byaCurrentBuffer.ToBCDAsInteger(iCurrentItterator + 9, 2))
                         };
 
-                        iCurrentTableDataLengthLimit = ToByteAsInteger(byaCurrentBuffer[(iCurrentItterator + 10)..]);
+                        iCurrentTableDataLengthLimit = byaCurrentBuffer.ToDVBLengthAsInteger(iCurrentItterator + 10);
                         iEITEvents += 1;
 
                         for (var iCurrentSubItterator = 0; iCurrentSubItterator < iCurrentTableDataLengthLimit; iCurrentSubItterator += iCurrentTableDataLength + 2)
@@ -708,13 +747,14 @@ namespace KON.OctoScan.NET
                             var iCurrentItteratorOffset = iCurrentItterator + iCurrentSubItterator + 12;
                             var iCurrentDescriptorsTag = byaCurrentBuffer[iCurrentItteratorOffset];
                             iCurrentTableDataLength = byaCurrentBuffer[iCurrentItteratorOffset + 1];
+
                             switch (iCurrentDescriptorsTag)
                             {
-                                case 0x4D:
+                                case 0x4D: // Short Event Descriptor
                                 {
                                     if (iCurrentTableDataLength >= 5)
                                     {
-                                        oeCurrentOSEvent.strLanguage = Encoding.ASCII.GetString(byaCurrentBuffer[(iCurrentItteratorOffset + 2)..(iCurrentItteratorOffset + 5)]).ToLower();
+                                        oeCurrentOSEvent.strLanguage = Encoding.ASCII.GetString(byaCurrentBuffer, iCurrentItteratorOffset + 2, 3).ToLower();
 
                                         var eCurrentEncoding = Encoding.UTF8;
                                         var lCurrentLanguage = ISO639LanguageCollection.AllISO639Languages.First(lCurrentLanguage => lCurrentLanguage.ISO6393Code.ToLower().Equals(oeCurrentOSEvent.strLanguage.ToLower(), StringComparison.InvariantCultureIgnoreCase));

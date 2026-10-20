@@ -160,19 +160,34 @@ namespace KON.OctoScan.NET
 
                                 switch (byCurrentTableID)
                                 {
+                                    // PAT - Program Access Table
                                     case 0x00:
                                         bTableResult = otsfCurrentOSTransportStreamFilter.AddProgramAssociationTableData();
                                         break;
+                                    // CAT - Conditional Access Table
+                                    case 0x01:
+                                        bTableResult = false;
+                                        break;
+                                    // PMT - Program Map Table
                                     case 0x02:
                                         bTableResult = otsfCurrentOSTransportStreamFilter.AddProgramMapTableData();
                                         break;
-                                    case >= 0x40 and <= 0x41:
+                                    // NIT - Network Information Table (actual and other)
+                                    case 0x40:
                                         bTableResult = otsfCurrentOSTransportStreamFilter.AddNetworkInformationTableData();
                                         break;
-                                    case >= 0x42 and <= 0x46:
+                                    case 0x41:
+                                        bTableResult = false;
+                                        break;
+                                    // SDT - Service Description Table (actual and other)
+                                    case 0x42:
                                         bTableResult = otsfCurrentOSTransportStreamFilter.AddServiceDescriptionTableData();
                                         break;
-                                    case >= 0x4E and <= 0x6F:
+                                    case 0x46:
+                                        bTableResult = false;
+                                        break;
+                                    // EIT - Event Information Table (present/following actual and other, Schedule actual and other)
+                                    case 0x4E or 0x4F or (>= 0x50 and <= 0x5F) or (>= 0x60 and <= 0x6F):
                                         bTableResult = otsfCurrentOSTransportStreamFilter.AddEventInformationTableData(bDoEITRefresh);
                                         break;
                                     default:

@@ -5,17 +5,18 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AllowUnsafeBlocks>False</AllowUnsafeBlocks>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <Platforms>AnyCPU</Platforms>
 	<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+	<StartupObject>KON.OctoScan.NET.Program</StartupObject>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <DebugType>none</DebugType>
+    <DebugType>full</DebugType>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <DebugType>none</DebugType>
+    <DebugType>full</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
@@ -36,19 +37,21 @@
 
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
-    <PackageReference Include="NanoXLSX" Version="3.1.0" />
+    <PackageReference Include="NanoXLSX" Version="3.2.1" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Nito.HashAlgorithms" Version="1.0.1" />
-    <PackageReference Include="NLog" Version="6.1.4" />
-    <PackageReference Include="Pastel" Version="7.0.1" />
-    <PackageReference Include="Polly" Version="8.7.0" />
+    <PackageReference Include="NLog" Version="6.2.1" />
+    <PackageReference Include="Pastel" Version="8.0.0" />
+    <PackageReference Include="Polly" Version="8.8.0" />
   </ItemGroup>
 
+	<!--
 	<Target Name="PostBuildPublish" AfterTargets="PostBuildEvent" Condition="'$(PUBLISHING)' == ''">
 		<Message Importance="high" Text="====================================" />
 		<Message Importance="high" Text="Running publishing as PostBuildEvent" />
 		<Message Importance="high" Text="====================================" />
 		<Exec Command="if $(ConfigurationName) == Debug ( $(ProjectDir)Publish.Debug.bat ) else ( $(ProjectDir)Publish.Release.bat )" IgnoreExitCode="false" />
 	</Target>
+	-->
 
 </Project>

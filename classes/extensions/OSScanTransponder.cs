@@ -1,8 +1,9 @@
-﻿using System.Net.Sockets;
+﻿using System.Globalization;
 using System.Net;
-using System.Globalization;
+using System.Net.Sockets;
 using System.Text;
 
+using NanoXLSX;
 using Pastel;
 using Polly;
 
@@ -15,7 +16,7 @@ namespace KON.OctoScan.NET
     {
         extension(OSScanTransponder ostLocalOSScanTransponder)
         {
-            public bool Scan(long lLocalTimeout = 600, int iLocalTransponderRetries = 10)
+            public bool Scan(int iLocalTransponderRetries)
             {
                 lCurrentLogger.Trace("OSScanTransponder.Scan()".Pastel(ConsoleColor.Cyan));
 
@@ -29,9 +30,6 @@ namespace KON.OctoScan.NET
 
                 osicCurrentOSSatIPConnection.iSequence = 0;
                 osicCurrentOSSatIPConnection.iNSPort = 0;
-
-                ostLocalOSScanTransponder.lTimestamp = CurrentTimestamp();
-                ostLocalOSScanTransponder.lTimeout = lLocalTimeout;
 
                 ostLocalOSScanTransponder.InitSocketUDP();
                 if (osicCurrentOSSatIPConnection.nsSocketUDP is not { IsBound: true })
@@ -52,10 +50,9 @@ namespace KON.OctoScan.NET
                     return false;
 
                 var bUpdatePIDSuccessful = false;
-                var cCurrentContext = new Context { { "Retries", 0 } };
-                Policy.HandleResult<bool>(r => r != true).WaitAndRetry(iLocalTransponderRetries, _ => TimeSpan.FromSeconds(1), onRetry: (_, _, retryCount, context) => { context["Retries"] = retryCount; }).Execute(delegate { ostLocalOSScanTransponder.UpdatePIDs(); return bUpdatePIDSuccessful = ostLocalOSScanTransponder.RTSPCheckOK(); }, cCurrentContext);
-                ostLocalOSScanTransponder.lRetries = Convert.ToInt32(cCurrentContext["Retries"]);
-                ostLocalOSScanTransponder.lTimeout += ostLocalOSScanTransponder.lRetries;
+                var cCurrentChildContext = new Context { { "Retries", 0 } };
+                Policy.HandleResult<bool>(r => !r).WaitAndRetry(iLocalTransponderRetries, _ => TimeSpan.FromSeconds(1), onRetry: (_, _, retryCount, context) => { context["Retries"] = retryCount; }).Execute(delegate { ostLocalOSScanTransponder.UpdatePIDs(); bUpdatePIDSuccessful = ostLocalOSScanTransponder.RTSPCheckOK(); return bUpdatePIDSuccessful; }, cCurrentChildContext);
+                ostLocalOSScanTransponder.lRetries = Convert.ToInt32(cCurrentChildContext["Retries"]);
 
                 if (!bUpdatePIDSuccessful)
                     return false;
@@ -68,11 +65,15 @@ namespace KON.OctoScan.NET
 
                 Socket.Select(new List<Socket> { osicCurrentOSSatIPConnection.nsSocketTCP, osicCurrentOSSatIPConnection.nsSocketUDP }, null, null, 1000000);
 
-                while (!bDone && !ostLocalOSScanTransponder.otsiOSTransportStreamInfo.bDone && ostLocalOSScanTransponder.lTimestamp + ostLocalOSScanTransponder.lTimeout >= CurrentTimestamp())
+                var bEmptyPacketCounter = 0;
+                while (!bDone && !ostLocalOSScanTransponder.otsiOSTransportStreamInfo.bDone)
                 {
                     ostLocalOSScanTransponder.RTSPSendOptions();
                     if (!ostLocalOSScanTransponder.RTSPCheckOK())
+                    {
+                        ostLocalOSScanTransponder.bFailed = true;
                         break;
+                    }
 
                     var byCurrentReceiveBufferUDP = new byte[10000];
                     if (!osicCurrentOSSatIPConnection.nsSocketUDP.Poll(1000000, SelectMode.SelectRead))
@@ -81,16 +82,18 @@ namespace KON.OctoScan.NET
                     var iReceivedBytesUDP = osicCurrentOSSatIPConnection.nsSocketUDP.Receive(byCurrentReceiveBufferUDP);
 
                     if (iReceivedBytesUDP <= 12)
+                    {
+                        if(bEmptyPacketCounter++ >= 20)
+                        {
+                            ostLocalOSScanTransponder.bTimeout = true;
+                            break;
+                        }
+
                         continue;
+                    }
 
                     ostLocalOSScanTransponder.ProcessTransponders(byCurrentReceiveBufferUDP[12..iReceivedBytesUDP], iReceivedBytesUDP - 12);
-                    ostLocalOSScanTransponder.lTimestamp = CurrentTimestamp();
                 }
-
-                if (!bDone && !ostLocalOSScanTransponder.otsiOSTransportStreamInfo.bDone && ostLocalOSScanTransponder.lTimestamp + ostLocalOSScanTransponder.lTimeout <= CurrentTimestamp())
-                    ostLocalOSScanTransponder.bTimedOut = true;
-                else
-                    ostLocalOSScanTransponder.bTimedOut = false;
 
                 if (ostLocalOSScanTransponder.otiOSTransponderInfo != null)
                 {
@@ -111,6 +114,7 @@ namespace KON.OctoScan.NET
                 }
 
                 ostLocalOSScanTransponder.RTSPSendTeardown();
+                ostLocalOSScanTransponder.bTimeout = ostLocalOSScanTransponder.otiOSTransponderInfo?.olosOSListOSService.Count == 0 && ostLocalOSScanTransponder.bTimeout;
 
                 if (osicCurrentOSSatIPConnection.nsSocketTCP is { Connected: true })
                     osicCurrentOSSatIPConnection.nsSocketTCP.Close();
@@ -123,19 +127,24 @@ namespace KON.OctoScan.NET
                 lCurrentLogger.Trace("OSScanTransponder.InitSocketUDP()".Pastel(ConsoleColor.Cyan));
 
                 bool bSocketBound;
-                var nsSocketUDP = new Socket(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
+                var nsSocketUDP = oCurrentOptions?.cloIPv6 == true ? new Socket(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp) : new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
                 if (ostLocalOSScanTransponder.osicOSSatIPConnection == null)
                     return;
 
                 try
                 {
-                    nsSocketUDP.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+                    if (oCurrentOptions?.cloIPv6 == true)
+                    {
+                        nsSocketUDP.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+                        nsSocketUDP.DualMode = true;
+                    }
+
                     nsSocketUDP.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                     nsSocketUDP.ReceiveBufferSize = 10000;
                     nsSocketUDP.Ttl = 5;
 
-                    nsSocketUDP.Bind(new IPEndPoint(IPAddress.IPv6Any, ostLocalOSScanTransponder.osicOSSatIPConnection.iNSPort));
+                    nsSocketUDP.Bind(oCurrentOptions?.cloIPv6 == true ? new IPEndPoint(IPAddress.IPv6Any, ostLocalOSScanTransponder.osicOSSatIPConnection.iNSPort) : new IPEndPoint(IPAddress.Any, ostLocalOSScanTransponder.osicOSSatIPConnection.iNSPort));
                     bSocketBound = true;
 
                     if (nsSocketUDP.LocalEndPoint != null)
@@ -161,7 +170,7 @@ namespace KON.OctoScan.NET
                 lCurrentLogger.Trace("OSScanTransponder.InitSocketTCP()".Pastel(ConsoleColor.Cyan));
 
                 var bSocketConnected = false;
-                var nsSocketTCP = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
+                var nsSocketTCP = oCurrentOptions?.cloIPv6 == true ? new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp) : new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
                 if (ostLocalOSScanTransponder.osicOSSatIPConnection == null || string.IsNullOrEmpty(ostLocalOSScanTransponder.osicOSSatIPConnection.strHost))
                     return;
@@ -172,7 +181,13 @@ namespace KON.OctoScan.NET
                 {
                     try
                     {
-                        nsSocketTCP.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+                        if (oCurrentOptions?.cloIPv6 == true && address.AddressFamily == AddressFamily.InterNetworkV6)
+                        {
+                            nsSocketTCP.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
+                            nsSocketTCP.DualMode = true;
+                        }
+                        
+                        nsSocketTCP.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.ReuseAddress, true);
                         nsSocketTCP.Connect(new IPEndPoint(address, ostLocalOSScanTransponder.osicOSSatIPConnection.iPort));
                         bSocketConnected = true;
 
@@ -367,6 +382,14 @@ namespace KON.OctoScan.NET
                 ostLocalOSScanTransponder.otsiOSTransportStreamInfo.opiiOSPacketIdentifierInfo[iLocalPID].iUseTableExtension = iLocalUseTableExtension;
             }
 
+            /// <summary>
+            /// Adds a new transport stream filter to the list of filters for the specified PID, table ID, and table extension. If a filter with the same parameters already exists, it will not be added again.
+            /// </summary>
+            /// <param name="iLocalPID"></param>
+            /// <param name="byLocalTableID"></param>
+            /// <param name="iLocalTableExtension"></param>
+            /// <param name="iLocalUseTableExtension"></param>
+            /// <param name="lLocalTimeout"></param>
             public void AddSFilter(int iLocalPID, byte byLocalTableID, int iLocalTableExtension, int iLocalUseTableExtension, long lLocalTimeout)
             {
                 lCurrentLogger.Trace("OSScanTransponder.AddSFilter()".Pastel(ConsoleColor.Cyan));
@@ -393,7 +416,7 @@ namespace KON.OctoScan.NET
 
             public void ProcessTransponders(byte[] byaLocalBuffer, int iReceivedBytes)
             {
-                lCurrentLogger.Trace("OSScanTransponder.ProcessTransponders()".Pastel(ConsoleColor.Cyan));
+                lCurrentLogger.Trace($"OSScanTransponder.ProcessTransponders() - Received Bytes {iReceivedBytes}".Pastel(ConsoleColor.Cyan));
 
                 if (ostLocalOSScanTransponder.otsiOSTransportStreamInfo?.olotsfOSListOSTransportStreamFilter != null)
                 {

@@ -7,9 +7,8 @@
         public OSTransportStreamInfo? otsiOSTransportStreamInfo = new();
         public OSSatIPConnection? osicOSSatIPConnection = new();
 
-        public long lTimeout;
-        public long lTimestamp;
-        public bool bTimedOut;
+        public bool bFailed = false;
+        public bool bTimeout = false;
         public long lRetries;
     }
 }

@@ -10,10 +10,11 @@ namespace KON.OctoScan.NET
         public string strName = new(Convert.ToChar(0x00), 80);
         public bool bGotFromProgramMapTable;
         public bool bGotFromServiceDescriptorTable;
-        public int iConditionalAccessMode;
-        public int iEventInformationTablePresentFollowing;
-        public int iEventInformationTableSchedule;
         public int iServiceID;
+        public int iEventInformationTableSchedule;
+        public int iEventInformationTablePresentFollowing;
+        public int iConditionalAccessMode;
+        public int iRunningStatus;
         public int iTransportStreamID;
         public int iOriginalNetworkID;
         public int iProgramMapTable;
@@ -22,10 +23,9 @@ namespace KON.OctoScan.NET
         public int iVideoPacketIdentifier;
         public byte byVideoPacketIdentifierStreamType;
 
-        public byte byAudioChannels;
-        public int[] iaAudioPacketIdentifiers = new int[MAX_ANUM];
-        public byte[] byaAudioPacketIdentifiersStreamType = new byte[MAX_ANUM];
-        public string[] saAudioPacketIdentifiersLanguage = new string[MAX_ANUM];
+        public List<int> liAudioPacketIdentifiers = [];
+        public List<byte> lbAudioPacketIdentifiersStreamType = [];
+        public List<string> lsAudioPacketIdentifiersLanguage = [];
 
         public int iSubtitlePacketIdentifier;
         public int iTeletextPacketIdentifier;

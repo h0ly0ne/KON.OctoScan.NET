@@ -32,15 +32,17 @@ namespace KON.OctoScan.NET
 
                 foreach (var osCurrentOSService in otiLocalOSTransponderInfo.olosOSListOSService)
                 {
-                    if (osCurrentOSService.bGotFromProgramMapTable && (osCurrentOSService.iVideoPacketIdentifier != 0 || osCurrentOSService.byAudioChannels > 0))
-                    {
-                        lCurrentLogger.Info("SERVICE".Pastel(ConsoleColor.Green));
-                        lCurrentLogger.Info($" PROVIDERNAME:  {osCurrentOSService.strProviderName}".Pastel(ConsoleColor.Green));
-                        lCurrentLogger.Info($" SERVICENAME:   {osCurrentOSService.strName}".Pastel(ConsoleColor.Green));
-                        lCurrentLogger.Info($" ONID:          {osCurrentOSService.iOriginalNetworkID}".Pastel(ConsoleColor.Green));
-                        lCurrentLogger.Info($" TSID:          {osCurrentOSService.iTransportStreamID}".Pastel(ConsoleColor.Green));
-                        lCurrentLogger.Info($" SID:           {osCurrentOSService.iServiceID}".Pastel(ConsoleColor.Green));
+                    lCurrentLogger.Info("SERVICE".Pastel(ConsoleColor.Green));
+                    lCurrentLogger.Info($" PROVIDERNAME:  {osCurrentOSService.strProviderName}".Pastel(ConsoleColor.Green));
+                    lCurrentLogger.Info($" SERVICENAME:   {osCurrentOSService.strName}".Pastel(ConsoleColor.Green));
+                    lCurrentLogger.Info($" ONID:          {osCurrentOSService.iOriginalNetworkID}".Pastel(ConsoleColor.Green));
+                    lCurrentLogger.Info($" TSID:          {osCurrentOSService.iTransportStreamID}".Pastel(ConsoleColor.Green));
+                    lCurrentLogger.Info($" SID:           {osCurrentOSService.iServiceID}".Pastel(ConsoleColor.Green));
+                    lCurrentLogger.Info($" RUNNINGSTATUS: {osCurrentOSService.iRunningStatus}".Pastel(ConsoleColor.Green));
+                    lCurrentLogger.Info($" GOTFROMSDT:    {osCurrentOSService.bGotFromServiceDescriptorTable.ToString()}".Pastel(ConsoleColor.Green));
 
+                    if (osCurrentOSService.bGotFromProgramMapTable)
+                    {
                         var strCurrentPIDs = Convert.ToString(osCurrentOSService.iProgramMapTable);
                         var iCurrentProgramClockReferencePacketIdentifier = osCurrentOSService.iProgramClockReferencePacketIdentifier;
 
@@ -55,16 +57,7 @@ namespace KON.OctoScan.NET
                                 iCurrentProgramClockReferencePacketIdentifier = 0;
                         }
 
-                        for (int i = 0; i < osCurrentOSService.byAudioChannels; i += 1)
-                        {
-                            if (osCurrentOSService.iaAudioPacketIdentifiers[i] != 0)
-                            {
-                                strCurrentPIDs += "," + Convert.ToString(osCurrentOSService.iaAudioPacketIdentifiers[i]);
-
-                                if (osCurrentOSService.iaAudioPacketIdentifiers[i] == iCurrentProgramClockReferencePacketIdentifier)
-                                    iCurrentProgramClockReferencePacketIdentifier = 0;
-                            }
-                        }
+                        strCurrentPIDs += "," + osCurrentOSService.liAudioPacketIdentifiers.StringJoin();
 
                         if (osCurrentOSService.iSubtitlePacketIdentifier != 0)
                         {
@@ -86,19 +79,8 @@ namespace KON.OctoScan.NET
                             strCurrentPIDs += "," + Convert.ToString(iCurrentProgramClockReferencePacketIdentifier);
 
                         lCurrentLogger.Info($" PIDS:          {strCurrentPIDs}".Pastel(ConsoleColor.Green));
-
-                        if (osCurrentOSService.byAudioChannels > 0 && osCurrentOSService.iaAudioPacketIdentifiers[0] != 0)
-                        {
-                            var strCurrentAPIDs = Convert.ToString(osCurrentOSService.iaAudioPacketIdentifiers[0]);
-
-                            for (int i = 1; i < osCurrentOSService.byAudioChannels; i += 1)
-                            {
-                                if (osCurrentOSService.iaAudioPacketIdentifiers[i] != 0)
-                                    strCurrentAPIDs += "," + Convert.ToString(osCurrentOSService.iaAudioPacketIdentifiers[i]);
-                            }
-
-                            lCurrentLogger.Info($" APIDS:         {strCurrentAPIDs}".Pastel(ConsoleColor.Green));
-                        }
+                        lCurrentLogger.Info($" VPID:          {osCurrentOSService.iVideoPacketIdentifier}".Pastel(ConsoleColor.Green));
+                        lCurrentLogger.Info($" APIDS:         {osCurrentOSService.liAudioPacketIdentifiers.StringJoin()}".Pastel(ConsoleColor.Green));
 
                         if (osCurrentOSService.iVideoPacketIdentifier == 0)
                             lCurrentLogger.Info(" RADIO:         1".Pastel(ConsoleColor.Green));
@@ -107,9 +89,10 @@ namespace KON.OctoScan.NET
                             lCurrentLogger.Info(" ENC:           1".Pastel(ConsoleColor.Green));
 
                         lCurrentLogger.Info($" EIT:           {osCurrentOSService.iEventInformationTablePresentFollowing}{osCurrentOSService.iEventInformationTableSchedule}".Pastel(ConsoleColor.Green));
-                        lCurrentLogger.Info("END".Pastel(ConsoleColor.Green));
-                        lCurrentLogger.Info(string.Empty.Pastel(ConsoleColor.Green));
                     }
+
+                    lCurrentLogger.Info("END".Pastel(ConsoleColor.Green));
+                    lCurrentLogger.Info(string.Empty.Pastel(ConsoleColor.Green));
                 }
             }
 

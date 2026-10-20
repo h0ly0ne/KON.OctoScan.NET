@@ -144,36 +144,6 @@ namespace KON.OctoScan.NET
             return uiCurrentCRCValue;
         }
 
-        public static int GetBCD(byte[]? byaLocalBuffer, int iLocalLength)
-        {
-            lCurrentLogger.Trace("Global.GetBCD()".Pastel(ConsoleColor.Cyan));
-
-            if (byaLocalBuffer == null) 
-                return 0;
-            
-            var iCurrentValue = 0;
-
-            for (var i = 0; i < iLocalLength / 2; i++)
-            {
-                iCurrentValue = iCurrentValue * 100 + (byaLocalBuffer[i] >> 4) * 10 + (byaLocalBuffer[i] & 0x0F);
-            }
-
-            if ((iLocalLength & 1) != 0)
-                iCurrentValue = iCurrentValue * 10 + (byaLocalBuffer[iLocalLength / 2 - 1] >> 4);
-
-            return iCurrentValue;
-        }
-
-        public static int ToUShortAsInteger(byte[]? byaLocalBuffer)
-        {
-            lCurrentLogger.Trace("Global.ToUShortAsInteger()".Pastel(ConsoleColor.Cyan));
-
-            if (byaLocalBuffer != null)
-                return (byaLocalBuffer[0] << 8) | byaLocalBuffer[1];
-
-            return 0;
-        }
-
         /// <summary>
         /// Global.GetBytesAsInt32()
         /// </summary>
@@ -210,16 +180,6 @@ namespace KON.OctoScan.NET
 
             var baCurrentBitArray = bLocalReverse ? new BitArray(byaLocalBuffer.Reverse().ToArray()) : new BitArray(byaLocalBuffer);
             return baCurrentBitArray.GetBitsAsInt64(iLocalStartBit, iLocalBitAmount);
-        }
-        
-        public static int ToByteAsInteger(byte[]? byaLocalBuffer)
-        {
-            lCurrentLogger.Trace("Global.ToByteAsInteger()".Pastel(ConsoleColor.Cyan));
-
-            if (byaLocalBuffer != null)
-                return ((byaLocalBuffer[0] & 0x0F) << 8) | byaLocalBuffer[1];
-
-            return 0;
         }
 
         public static void GetDateFromModifiedJulianDate(int iLocalModifiedJulianDate, ref int y, ref int m, ref int d)

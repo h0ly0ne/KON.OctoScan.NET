@@ -14,17 +14,15 @@
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
     <PackageReference Include="NanoXLSX" Version="3.2.1" />
-    <PackageReference Include="NLog" Version="6.2.1" />
+    <PackageReference Include="NLog" Version="6.2.2" />
     <PackageReference Include="Pastel" Version="8.0.0" />
   </ItemGroup>
 
-	<!--
 	<Target Name="PostBuildPublish" AfterTargets="PostBuildEvent" Condition="'$(PUBLISHING)' == ''">
 		<Message Importance="high" Text="====================================" />
 		<Message Importance="high" Text="Running publishing as PostBuildEvent" />
 		<Message Importance="high" Text="====================================" />
 		<Exec Command="if $(ConfigurationName) == Debug ( $(ProjectDir)Publish.Debug.bat ) else ( $(ProjectDir)Publish.Release.bat )" IgnoreExitCode="false" />
 	</Target>
-	-->
 
 </Project>

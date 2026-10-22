@@ -33,7 +33,6 @@ public static class Enums
         XAIT_location_descriptor                        = 0x7D,
         extension_descriptor                            = 0x7F
     }
-
     public enum MPEG2TSStreamType : byte
     {
         ITU_T_ISO_IEC_Reserved_Data                         = 0x00,     // ITU-T | ISO/IEC Reserved Data

@@ -2,6 +2,10 @@
 
 public static class Constants
 {
+    public static readonly string cstrCurrentProjectName = "KON.OctoScan.NET";
+    public static readonly string cstrCurrentProjectCopyrightLine1 = "Copyright (C) 2016 Digital Devices GmbH";
+    public static readonly string cstrCurrentProjectCopyrightLine2 = "Copyright (C) 2024-2026 Oswald Oliver";
+
     public const string FIREWALL_RULE_APP_NAME = "KON.OctoScan.NET";
 
     public const int MAX_EIT_SID = 64;
@@ -36,6 +40,7 @@ public static class Constants
     public const int RTP_CLOCK_MAX_DISCONTINUITIES = 10;
     public const int RTP_CLOCK_MAX_AHEAD = 500;
     public const int RTP_CLOCK_MAX_AHEAD_FALLBACK = 1000;
+    public const int TRANSPONDER_SCAN_RETRIES = 3;
     public const int TUNER_LOCK_GRACE_TIME = 3000;
     public const int UDP_PORT_PAIR_BIND_ATTEMPTS = 10;
     public const int UDP_RECEIVE_BUFFER_SIZE = 4 * 1024 * 1024;

@@ -31,12 +31,11 @@ public static class OSTransponderInfo_Extension
         /// <summary>
         /// OSTransponderInfo.PrintServices()
         /// </summary>
-        /// <param name="lLocalServiceIDs">Only these services (null for all)</param>
-        public void PrintServices(IReadOnlyCollection<int>? lLocalServiceIDs = null)
+        public void PrintServices()
         {
             LogTrace("OSTransponderInfo.PrintServices()");
 
-            foreach (var osCurrentOSService in otiLocalOSTransponderInfo.olosOSListOSService.Where(osCurrentOSService => lLocalServiceIDs == null || lLocalServiceIDs.Contains(osCurrentOSService.iServiceID)))
+            foreach (var osCurrentOSService in otiLocalOSTransponderInfo.olosOSListOSService)
             {
                 lCurrentLogger.Info("SERVICE".Pastel(ConsoleColor.Green));
                 lCurrentLogger.Info($" PROVIDERNAME:  {osCurrentOSService.strProviderName}".Pastel(ConsoleColor.Green));

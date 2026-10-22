@@ -156,15 +156,6 @@ public static class OSScanTransponder_Extension
                 if (!bDataReceived)
                     ostLocalOSScanTransponder.bTimeout = true;
 
-                if (!bSecondPass && ostLocalOSScanTransponder.otiOSTransponderInfo != null && oCurrentOptions != null)
-                {
-                    if (ostLocalOSScanTransponder.otiOSTransponderInfo.bScanEventInformationTable && oCurrentOptions.cloPrintEvents)
-                        ostLocalOSScanTransponder.otiOSTransponderInfo.PrintEvents();
-
-                    if (oCurrentOptions.cloPrintServices)
-                        ostLocalOSScanTransponder.otiOSTransponderInfo.PrintServices();
-                }
-
                 ostLocalOSScanTransponder.bTimeout = ostLocalOSScanTransponder.otiOSTransponderInfo?.olosOSListOSService.Count == 0 && ostLocalOSScanTransponder.bTimeout;
                 bKeepSession = !ostLocalOSScanTransponder.bFailed;
 
@@ -332,13 +323,13 @@ public static class OSScanTransponder_Extension
 
             for (var iCurrentAttempt = 0; iCurrentAttempt < UDP_PORT_PAIR_BIND_ATTEMPTS; iCurrentAttempt++)
             {
-                var nsSocketUDP = CreateUDPSocket(0, UDP_RECEIVE_BUFFER_SIZE);
+                var nsSocketUDP = CreateUDPSocket(0, UDP_RECEIVE_BUFFER_SIZE, osicCurrentOSSatIPConnection.bIPv6);
 
                 if (nsSocketUDP == null)
                     return;
 
                 var iCurrentPort = ((IPEndPoint)nsSocketUDP.LocalEndPoint!).Port;
-                var nsSocketRTCP = iCurrentPort % 2 == 0 ? CreateUDPSocket(iCurrentPort + 1, 0) : null;
+                var nsSocketRTCP = iCurrentPort % 2 == 0 ? CreateUDPSocket(iCurrentPort + 1, 0, osicCurrentOSSatIPConnection.bIPv6) : null;
 
                 if (nsSocketRTCP != null || iCurrentAttempt == UDP_PORT_PAIR_BIND_ATTEMPTS - 1)
                 {
@@ -446,7 +437,7 @@ public static class OSScanTransponder_Extension
             if (ostLocalOSScanTransponder.osicOSSatIPConnection == null || string.IsNullOrEmpty(ostLocalOSScanTransponder.osicOSSatIPConnection.strHost))
                 return;
 
-            var bUseIPv6 = oCurrentOptions?.cloIPv6 == true;
+            var bUseIPv6 = ostLocalOSScanTransponder.osicOSSatIPConnection.bIPv6;
             var strCurrentHost = ostLocalOSScanTransponder.osicOSSatIPConnection.strHost;
             IPAddress[] ipaaCurrentAddresses;
 
@@ -940,23 +931,23 @@ public static class OSScanTransponder_Extension
     /// </summary>
     /// <param name="iLocalPort">0 for an ephemeral port</param>
     /// <param name="iLocalReceiveBufferSize">0 to keep the default</param>
+    /// <param name="bLocalIPv6"></param>
     /// <returns>Socket</returns>
-    private static Socket? CreateUDPSocket(int iLocalPort, int iLocalReceiveBufferSize)
+    private static Socket? CreateUDPSocket(int iLocalPort, int iLocalReceiveBufferSize, bool bLocalIPv6)
     {
         LogTrace("OSScanTransponder.CreateUDPSocket()");
 
-        var bUseIPv6 = oCurrentOptions?.cloIPv6 == true;
-        var nsCurrentSocket = new Socket(bUseIPv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        var nsCurrentSocket = new Socket(bLocalIPv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
         try
         {
-            if (bUseIPv6)
+            if (bLocalIPv6)
                 nsCurrentSocket.DualMode = true;
 
             if (iLocalReceiveBufferSize > 0)
                 nsCurrentSocket.ReceiveBufferSize = iLocalReceiveBufferSize;
 
-            nsCurrentSocket.Bind(new IPEndPoint(bUseIPv6 ? IPAddress.IPv6Any : IPAddress.Any, iLocalPort));
+            nsCurrentSocket.Bind(new IPEndPoint(bLocalIPv6 ? IPAddress.IPv6Any : IPAddress.Any, iLocalPort));
             return nsCurrentSocket;
         }
         catch (SocketException sexcCurrentSocketException)

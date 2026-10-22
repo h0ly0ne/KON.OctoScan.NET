@@ -1,10 +1,9 @@
-﻿using System.Globalization;
+﻿using NLog;
+using Pastel;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-
-using NLog;
-using Pastel;
 
 using static KON.OctoScan.NET.Constants;
 using static KON.OctoScan.NET.Program;
@@ -14,11 +13,10 @@ namespace KON.OctoScan.NET;
 public static class Global
 {
     public static readonly Logger lCurrentLogger = LogManager.GetCurrentClassLogger();
-    public static Options? oCurrentOptions;
     private static Encoding? eISO6937Encoding;
     private static readonly Dictionary<int, Encoding> dieISO8859Encodings = [];
     private static readonly Dictionary<string, string> dssEventLanguages = new(StringComparer.OrdinalIgnoreCase);
-
+    
     public static bool bDone = false;
     public static int iEITSize = 0;
     public static int iEITSections = 0;
@@ -30,6 +28,58 @@ public static class Global
     private const int NET_FW_RULE_DIR_OUT = 2;
     private const int NET_FW_ACTION_ALLOW = 1;
 
+    public enum FlagMode
+    {
+        Scan = 0,
+        Parse = 1
+    }
+    public enum FlagSubMode
+    {
+        None = 0,
+        MJD = 1
+    }
+    public enum FlagModulationSystem
+    {
+        None = 0,
+        DVBC = 1,
+        DVBCB = 2,
+        DVBT = 3,
+        DSS = 4,
+        DVBS = 5,
+        DVBS2 = 6,
+        DVBH = 7,
+        ISDBT = 8,
+        ISDBS = 9,
+        ISDBC = 10,
+        ATSC = 11,
+        ATSCMH = 12,
+        DTMB = 13,
+        CMMB = 14,
+        DAB = 15,
+        DVBT2 = 16,
+        TURBO = 17,
+        DVBCC = 18,
+        DVBC2 = 19
+    }
+    public enum FlagModulationType
+    {
+        None = 0,
+        TQPSK = 1,
+        T16QAM = 2,
+        T32QAM = 3,
+        T64QAM = 4,
+        T128QAM = 5,
+        T256QAM = 6,
+        TAUTOQAM = 7,
+        T8VSB = 8,
+        T16VSB = 9,
+        T8PSK = 10,
+        T16APSK = 11,
+        T32APSK = 12,
+        TDQPSK = 13,
+        T4QAMNR = 14
+    }
+    
     /// <summary>
     /// Global.LogTrace()
     /// </summary>
@@ -83,7 +133,10 @@ public static class Global
         LogTrace("Global.CreateFirewallRule()");
 
         if (!OperatingSystem.IsWindows())
+        {
+            lCurrentLogger.Warn("-» No windows operating system - cannot create firewall rules.".Pastel(ConsoleColor.Yellow));
             return false;
+        }
 
         var tCurrentFwPolicyType = Type.GetTypeFromProgID("HNetCfg.FwPolicy2", false);
         var tCurrentFwRuleType = Type.GetTypeFromProgID("HNetCfg.FWRule", false);
@@ -127,7 +180,7 @@ public static class Global
         }
         catch (Exception excCurrentException)
         {
-            LogTrace($"Global.CreateFirewallRule() failed: {excCurrentException.Message}");
+            lCurrentLogger.Error($"-» Error on creating firewall rules: {excCurrentException.Message}.".Pastel(ConsoleColor.Red));
             return false;
         }
     }
@@ -407,7 +460,7 @@ public static class Global
 
         foreach (var strCurrentFrequency in strLocalFrequencies.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            var saCurrentRange = strCurrentFrequency.Split(['-', ':']);
+            var saCurrentRange = strCurrentFrequency.Split('-', ':');
 
             if (saCurrentRange.Length == 1 && int.TryParse(saCurrentRange[0], out var iCurrentFrequency))
             {
@@ -441,19 +494,19 @@ public static class Global
         var otiCurrentOSTransponderInfo = new OSTransponderInfo
         {
             iFrequency = iLocalFrequency,
-            iModulationSystem = Array.IndexOf(ModulationSystem2String, oLocalOptions.cloModulationSystem.ToString()),
-            iSymbolRate = oLocalOptions.cloSymbolRateInkSymbols ?? 0,
+            iModulationSystem = Array.FindIndex(ModulationSystem2String, strCurrentModulationSystem => strCurrentModulationSystem.Equals(oLocalOptions.cloModulationSystem.ToString(), StringComparison.OrdinalIgnoreCase)),
+            iSymbolRate = Convert.ToInt32(oLocalOptions.cloSymbolRate),
             iSource = oLocalOptions.cloSatelliteSource ?? 0,
             bUseNetworkInformationTable = oLocalOptions.cloNetworkInformationTable,
             bScanEventInformationTable = oLocalOptions.cloEventInformationTable,
-            iInputStreamID = oLocalOptions.cloPhysicalLayerPipes is >= 0 and <= 255 ? oLocalOptions.cloPhysicalLayerPipes.Value : 0
+            iInputStreamID = oLocalOptions.cloImageStreamIdentifier is >= 0 and <= 255 ? oLocalOptions.cloImageStreamIdentifier.Value : 0
         };
 
-        if (oLocalOptions.cloModulationType != null)
-            otiCurrentOSTransponderInfo.iModulationType = Math.Max(Array.IndexOf(ModulationType2String, oLocalOptions.cloModulationType.ToString()?[1..]), 0);
+        if (oLocalOptions.cloModulationType != FlagModulationType.None)
+            otiCurrentOSTransponderInfo.iModulationType = Math.Max(Array.FindIndex(ModulationType2String, strCurrentModulationType => strCurrentModulationType.Equals(oLocalOptions.cloModulationType.ToString()[1..], StringComparison.OrdinalIgnoreCase)), 0);
 
         if (!string.IsNullOrEmpty(oLocalOptions.cloPolarisation))
-            otiCurrentOSTransponderInfo.iPolarisation = Array.IndexOf(Polarisation2String, oLocalOptions.cloPolarisation);
+            otiCurrentOSTransponderInfo.iPolarisation = Array.FindIndex(Polarisation2String, strCurrentPolarisation => strCurrentPolarisation.Equals(oLocalOptions.cloPolarisation, StringComparison.OrdinalIgnoreCase));
 
         if (!string.IsNullOrEmpty(oLocalOptions.cloBandwidth))
             otiCurrentOSTransponderInfo.iBandwidth = Array.IndexOf(Bandwidth2String, oLocalOptions.cloBandwidth);
@@ -495,7 +548,7 @@ public static class Global
             iSource = 0,
             bUseNetworkInformationTable = false,
             bScanEventInformationTable = false,
-            iInputStreamID =0
+            iInputStreamID = 0
         };
 
         return otiCurrentOSTransponderInfo;

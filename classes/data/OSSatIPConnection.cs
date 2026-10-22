@@ -14,6 +14,7 @@ public class OSSatIPConnection
 
     public string? strHost;
     public int iPort;
+    public bool bIPv6;
     public int iNSPort;
     public int iSequence;
     public int iLastSentSequence = -1;

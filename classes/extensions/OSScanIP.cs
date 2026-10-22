@@ -74,11 +74,9 @@ public static class OSScanIP_Extension
         /// <summary>
         /// OSScanIP.Scan()
         /// </summary>
-        /// <param name="iLocalScanRetries"></param>
-        /// <param name="iLocalTunerLockGraceTime"></param>
-        /// <param name="iLocalServerPort"></param>
+        /// <param name="oLocalOptions"></param>
         /// <returns>bool</returns>
-        public bool Scan(int? iLocalScanRetries, int? iLocalTunerLockGraceTime, int iLocalServerPort = 554)
+        public bool Scan(Program.Options oLocalOptions)
         {
             LogTrace("OSScanIP.Scan()");
 
@@ -91,8 +89,9 @@ public static class OSScanIP_Extension
 
             ostCurrentOSScanTransponder.osiOSScanIP = osiLocalOSScanIP;
             otsiCurrentOSTransportStreamInfo.ostOSScanTransponder = ostCurrentOSScanTransponder;
-            osicCurrentOSSatIPConnection.iPort = iLocalServerPort;
+            osicCurrentOSSatIPConnection.iPort = Convert.ToInt32(oLocalOptions.cloServerPort);
             osicCurrentOSSatIPConnection.strHost = osiLocalOSScanIP.strHost;
+            osicCurrentOSSatIPConnection.bIPv6 = oLocalOptions.cloIPv6;
 
             try
             {
@@ -105,11 +104,11 @@ public static class OSScanIP_Extension
 
                     var lStartTime = CurrentTimestamp();
 
-                    Retry(iLocalScanRetries ?? 3, delegate
+                    Retry(oLocalOptions.cloScanRetries ?? TRANSPONDER_SCAN_RETRIES, delegate
                     {
                         otsiCurrentOSTransportStreamInfo.Init();
 
-                        if (!ostCurrentOSScanTransponder.Scan(iLocalTunerLockGraceTime ?? TUNER_LOCK_GRACE_TIME))
+                        if (!ostCurrentOSScanTransponder.Scan(oLocalOptions.cloTunerLockGraceTime ?? TUNER_LOCK_GRACE_TIME))
                             ostCurrentOSScanTransponder.bFailed = true;
 
                         return ostCurrentOSScanTransponder is { bFailed: false, bTimeout: false } or { bFailed: false, bNoSignal: true } or { bPermanentError: true };
@@ -134,7 +133,7 @@ public static class OSScanIP_Extension
                     lCurrentLogger.Info($"OPERATION(S) {strCurrentResult} (AND TOOK {lEndTime - lStartTime} SECOND(S) - RETRIES: {osiLocalOSScanIP.lRetries})".Pastel(ccCurrentResultColor));
                 }
 
-                osiLocalOSScanIP.ScanMissingProgramMapTables(iLocalScanRetries, iLocalTunerLockGraceTime);
+                osiLocalOSScanIP.ScanMissingProgramMapTables(oLocalOptions.cloScanRetries, oLocalOptions.cloTunerLockGraceTime);
             }
             finally
             {
@@ -171,7 +170,7 @@ public static class OSScanIP_Extension
                 lCurrentLogger.Info($"TUNE {osicCurrentOSSatIPConnection.strTune} (WAITING FOR {ltiiCurrentMissing.Count} PMT(S))".Pastel(ConsoleColor.Magenta));
                 var lStartTime = CurrentTimestamp();
 
-                Retry(iLocalScanRetries ?? 3, delegate
+                Retry(iLocalScanRetries ?? TRANSPONDER_SCAN_RETRIES, delegate
                 {
                     otsiCurrentOSTransportStreamInfo.Init();
 
@@ -183,17 +182,14 @@ public static class OSScanIP_Extension
 
                 var hsiCurrentStillMissing = otsiCurrentOSTransportStreamInfo.lotsfTimedOutProgramMapTables.Select(otsfCurrentOSTransportStreamFilter => otsfCurrentOSTransportStreamFilter.iTableExtension).ToHashSet();
                 var ltiiCurrentStillMissing = ostCurrentOSScanTransponder.bFailed || ostCurrentOSScanTransponder.bNoSignal ? ltiiCurrentMissing : ltiiCurrentMissing.Where(tCurrentEntry => hsiCurrentStillMissing.Contains(tCurrentEntry.iServiceID)).ToList();
-                var liCurrentReceived = ltiiCurrentMissing.Except(ltiiCurrentStillMissing).Select(tCurrentEntry => tCurrentEntry.iServiceID).ToList();
+                var iCurrentReceived = ltiiCurrentMissing.Count - ltiiCurrentStillMissing.Count;
 
                 if (ltiiCurrentStillMissing.Count > 0)
                     LogTrace($"Warning: {ltiiCurrentStillMissing.Count} PMT(s) without data within {FILTER_TIMEOUT_PMT_SECOND_PASS} s - {string.Join(", ", ltiiCurrentStillMissing.Select(tCurrentEntry => $"SID {tCurrentEntry.iServiceID} (PID 0x{tCurrentEntry.iPacketID:X4})"))}");
 
-                if (liCurrentReceived.Count > 0 && oCurrentOptions?.cloPrintServices == true)
-                    otiCurrentOSTransponderInfo.PrintServices(liCurrentReceived);
-
                 otiCurrentOSTransponderInfo.ltiiMissingProgramMapTables = ltiiCurrentStillMissing;
                 otsiCurrentOSTransportStreamInfo.Dispose();
-                var strCurrentResult = ostCurrentOSScanTransponder.bFailed ? $"FAILED{(ostCurrentOSScanTransponder.strFailReason != null ? $" ({ostCurrentOSScanTransponder.strFailReason})" : string.Empty)}" : $"{liCurrentReceived.Count} OF {ltiiCurrentMissing.Count} PMT(S) RECEIVED";
+                var strCurrentResult = ostCurrentOSScanTransponder.bFailed ? $"FAILED{(ostCurrentOSScanTransponder.strFailReason != null ? $" ({ostCurrentOSScanTransponder.strFailReason})" : string.Empty)}" : $"{iCurrentReceived} OF {ltiiCurrentMissing.Count} PMT(S) RECEIVED";
                 var ccCurrentResultColor = ostCurrentOSScanTransponder.bFailed ? ConsoleColor.Red : ltiiCurrentStillMissing.Count > 0 ? ConsoleColor.Yellow : ConsoleColor.Green;
 
                 lCurrentLogger.Info($"OPERATION(S) {strCurrentResult} (AND TOOK {CurrentTimestamp() - lStartTime} SECOND(S) - RETRIES: {iCurrentRetries})".Pastel(ccCurrentResultColor));

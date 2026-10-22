@@ -1,4 +1,6 @@
-﻿using System.Text;
+﻿using System.Diagnostics;
+using System.Drawing;
+using System.Text;
 
 using CommandLine;
 using CommandLine.Text;
@@ -6,153 +8,123 @@ using NLog;
 using NLog.Layouts;
 using Pastel;
 
-using static KON.OctoScan.NET.Constants;
 using static KON.OctoScan.NET.Global;
 
 namespace KON.OctoScan.NET
 {
     public class Program
     {
-        public enum FlagMode
-        {
-            scan        = 0,
-            parsedate   = 1
-        }
-
-        public enum FlagModulationSystem
-        {
-            dvbc   = 1,
-            dvbcb  = 2,
-            dvbt   = 3,
-            dss    = 4,
-            dvbs   = 5,
-            dvbs2  = 6,
-            dvbh   = 7,
-            isdbt  = 8,
-            isdbs  = 9,
-            isdbc  = 10,
-            atsc   = 11,
-            atscmh = 12,
-            dtmb   = 13,
-            cmmb   = 14,
-            dab    = 15,
-            dvbt2  = 16,
-            turbo  = 17,
-            dvbcc  = 18,
-            dvbc2  = 19
-        }
-
-        public enum FlagModulationType
-        {
-            tqpsk       = 1,
-            t16qam      = 2,
-            t32qam      = 3,
-            t64qam      = 4,
-            t128qam     = 5,
-            t256qam     = 6,
-            tautoqam    = 7,
-            t8vsb       = 8,
-            t16vsb      = 9,
-            t8psk       = 10,
-            t16apsk     = 11,
-            t32apsk     = 12,
-            tdqpsk      = 13,
-            t4qamnr     = 14
-        }
-
         public class Options
         {
-            [Value(0, MetaName = "<server ip>", HelpText = "IP Address of SAT>IP server (required for scan)", Required = false)]
-            public string? cloServerIP { get; set; }
+            [Option(longName: "mode", Required = true, HelpText = "Execution-Mode or Operation to use.")]
+            public FlagMode cloMode { get; set; }
 
-            [Option(longName: "serverport", Required = false, HelpText = "Port of SAT>IP server", Default = 554)]
-            public int cloServerPort { get; set; }
+            [Option(longName: "submode", HelpText = "Execution-Sub-Mode or Sub-Operation to use.")]
+            public FlagSubMode cloSubMode { get; set; }
 
-            [Option(longName: "ipv6", Required = false, HelpText = "Enable IPv6 Support", Default = false)]
+            [Option(longName: "ipv6", HelpText = "Enable IPv6 Support.", Default = false)]
             public bool cloIPv6 { get; set; }
 
-            [Option(longName: "mode", Required = true, HelpText = "Execution mode / Operation selection: scan/parsedate")]
-            public FlagMode? cloMode { get; set; }
-            
-            //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
+            [Option(longName: "serverip", HelpText = "IP Address of SAT>IP server.")]
+            public string? cloServerIP { get; set; }
 
-            [Option(longName: "mjd", Required = false, HelpText = "Parse Date from Modified Julian Date.")]
-            public long? cloModifiedJulianDate { get; set; }
+            [Option(longName: "serverport", HelpText = "Port of SAT>IP server.")]
+            public string? cloServerPort { get; set; }
 
-            [Option(longName: "frequencies", Required = false, HelpText = "Frequencies in MHz, comma separated. Ranges as start-end:step.\r\nExample: --frequencies=378,410-466:8")]
-            public string? cloFrequenciesInMHz { get; set; }
+            [Option(longName: "frequencies", HelpText = "Frequencies in MHz, comma separated. Ranges as start-end:step.")]
+            public string? cloFrequencies { get; set; }
 
-            [Option(longName: "modulationsystem", Required = false, HelpText = "Modulation System (required for scan).\r\nExample: --modulationsystem=dvbc")]
-            public FlagModulationSystem? cloModulationSystem { get; set; }
+            [Option(longName: "modulationsystem", HelpText = "Modulation System.")]
+            public FlagModulationSystem cloModulationSystem { get; set; }
 
-            [Option(longName: "modulationtype", Required = false, HelpText = "Modulation Type (required for DVB-C).\r\nExample: --modulationtype=t256qam")]
-            public FlagModulationType? cloModulationType { get; set; }
+            [Option(longName: "modulationtype", HelpText = "Modulation Type.")]
+            public FlagModulationType cloModulationType { get; set; }
 
-            [Option(longName: "symbolrate", Required = false, HelpText = "Symbolrate in kSymbols (required for DVB-S/S2 and DVB-C).\r\nExample: --symbolrate=6900")]
-            public int? cloSymbolRateInkSymbols { get; set; }
+            [Option(longName: "symbolrate", HelpText = "Symbolrate in kSymbols.")]
+            public int? cloSymbolRate { get; set; }
 
-            [Option(longName: "scanretries", Required = false, HelpText = "Retries per transponder (new connection and session) on timeouts and temporary server errors (default 3).\r\nExample: --scanretries=3")]
+            [Option(longName: "scanretries", HelpText = "Retries per transponder (new connection and session) on timeouts and temporary server errors.")]
             public int? cloScanRetries { get; set; }
 
-            [Option(longName: "tunerlockgracetime", Required = false, HelpText = "Time in milliseconds the tuner gets to lock before a transponder is skipped as without signal (default 3000).\r\nExample: --tunerlockgracetime=5000")]
+            [Option(longName: "tunerlockgracetime", HelpText = "Time in milliseconds the tuner gets to lock before a transponder is skipped as without signal.")]
             public int? cloTunerLockGraceTime { get; set; }
 
-            //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
-
-            [Option(longName: "satellitesource", Required = false, HelpText = "Satellite source 1,2,3,4 (required for DVB-S/S2).\r\nExample: --satellitesource=1")]
-            public int? cloSatelliteSource { get; set; }
-
-            [Option(longName: "polarisation", Required = false, HelpText = "Polarisation v,h,r,l (required for DVB-S/S2).\r\nExample: --polarisation=v")]
-            public string? cloPolarisation { get; set; }
-
-            [Option(longName: "bandwidth", Required = false, HelpText = "Bandwidth 1.712,5,6,7,8,10 (required for DVB-T/T2).\r\nExample: --bandwidth=8")]
-            public string? cloBandwidth { get; set; }
-
-            [Option(longName: "nit", Required = false, HelpText = "Use network information table. If specified additional transponders will be scanned from network information table.")]
-            public bool cloNetworkInformationTable { get; set; }
-
-            [Option(longName: "eit", Required = false, HelpText = "Use event information table. If specified event information will be collected from transponders.")]
-            public bool cloEventInformationTable { get; set; }
-
-            [Option(longName: "eitfiltersid", Required = false, HelpText = "Comma separated list of services that will be looked up from event information table.\r\nExample: --eitfiltersid=1000,1002,3003")]
-            public string? cloEventInformationTableSIDFilter { get; set; }
-
-            //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
-
-            [Option(longName: "imagestreamidentifier", Required = false, HelpText = "ImageStreamIdentifier for physical layer pipe.\r\nExample: --imagestreamidentifier=1")]
-            public int? cloPhysicalLayerPipes { get; set; }
-
-            //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
-            
-            [Option(longName: "printservices", Required = false, HelpText = "Output result from services scan.")]
-            public bool cloPrintServices { get; set; }
-
-            [Option(longName: "exportservices", Required = false, HelpText = "Export result from services scan to json file.")]
+            [Option(longName: "exportservices", HelpText = "Export result from services scan to json file.")]
             public bool cloExportServices { get; set; }
 
-            [Option(longName: "exportservicesexcel", Required = false, HelpText = "Export result from services scan to excel file.")]
+            [Option(longName: "exportservicesexcel", HelpText = "Export result from services scan to excel file.")]
             public bool cloExportServicesExcel { get; set; }
 
-            [Option(longName: "printevents", Required = false, HelpText = "Output result from events scan.")]
-            public bool cloPrintEvents { get; set; }
+            [Option(longName: "eit", HelpText = "Use event information table. If specified event information will be collected from transponders.")]
+            public bool cloEventInformationTable { get; set; }
 
-            [Option(longName: "exportevents", Required = false, HelpText = "Export result from events scan to json file.")]
+            [Option(longName: "eitfiltersid", HelpText = "Comma separated list of services that will be looked up from event information table.")]
+            public string? cloEventInformationTableSIDFilter { get; set; }
+
+            [Option(longName: "nit", HelpText = "Use network information table. If specified additional transponders will be scanned from network information table.")]
+            public bool cloNetworkInformationTable { get; set; }
+
+            [Option(longName: "satellitesource", HelpText = "Satellite source.")]
+            public int? cloSatelliteSource { get; set; }
+
+            [Option(longName: "polarisation", HelpText = "Polarisation.")]
+            public string? cloPolarisation { get; set; }
+
+            [Option(longName: "bandwidth", HelpText = "Bandwidth.")]
+            public string? cloBandwidth { get; set; }
+
+            [Option(longName: "imagestreamidentifier", HelpText = "ImageStreamIdentifier for physical layer pipe.")]
+            public int? cloImageStreamIdentifier { get; set; }
+
+            [Option(longName: "exportevents", HelpText = "Export result from events scan to json file.")]
             public bool cloExportEvents { get; set; }
 
-            [Option(longName: "exporteventsexcel", Required = false, HelpText = "Export result from events scan to excel file.")]
+            [Option(longName: "exporteventsexcel", HelpText = "Export result from events scan to excel file.")]
             public bool cloExportEventsExcel { get; set; }
 
-            //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
+            [Option(longName: "printservices", HelpText = "Output result from services scan.")]
+            public bool cloPrintServices { get; set; }
 
-            [Option(longName: "verbose", Required = false, HelpText = "Set output to verbose level.")]
+            [Option(longName: "printevents", HelpText = "Output result from events scan.")]
+            public bool cloPrintEvents { get; set; }
+
+            [Option(longName: "mjd", HelpText = "Parse Modified-Julian-Date to get normal date.")]
+            public long? cloModifiedJulianDate { get; set; }
+
+            [Option(longName: "verbose", HelpText = "Set output to verbose level.")]
             public bool cloVerbose { get; set; }
         }
 
+        /// <summary>
+        /// Program.WaitForKeyPress()
+        /// </summary>
+        [Conditional("DEBUG")]
+        private static void WaitForKeyPress()
+        {
+            LogTrace("Program.WaitForKeyPress()");
+
+            if (Console.IsInputRedirected)
+                return;
+
+            lCurrentLogger.Info("Press any key to continue ...".Pastel(ConsoleColor.Green));
+            Console.ReadKey();
+        }
+
+        /// <summary>
+        /// Program.Main()
+        /// </summary>
+        /// <param name="saLocalArguments"></param>
         private static void Main(string[] saLocalArguments)
         {
+            LogTrace("Program.Main()");
+
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
-            var pCurrentParser = new Parser(apsCurrentConfiguration => apsCurrentConfiguration.HelpWriter = null);
+            var pCurrentParser = new Parser(apsCurrentConfiguration =>
+            {
+                apsCurrentConfiguration.HelpWriter = null;
+                apsCurrentConfiguration.CaseInsensitiveEnumValues = true;
+            });
             var prCurrentParseResult = pCurrentParser.ParseArguments<Options>(saLocalArguments);
 
             prCurrentParseResult.WithParsed(delegate(Options oLocalOptions)
@@ -173,51 +145,123 @@ namespace KON.OctoScan.NET
             });
         }
 
-        private static void DisplayHelp<T>(ParserResult<T> result)
+        /// <summary>
+        /// Program.DisplayHelp()
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="prLocalParseResult"></param>
+        private static void DisplayHelp<T>(ParserResult<T> prLocalParseResult)
         {
-            var htCurrentHelpText = HelpText.AutoBuild(result, htCurrentHelpText =>
+            LogTrace("Program.DisplayHelp()");
+
+            var htCurrentHelpText = HelpText.AutoBuild(prLocalParseResult, htCurrentHelpText =>
+            {
+                htCurrentHelpText.AddNewLineBetweenHelpSections = false;
+                htCurrentHelpText.AdditionalNewLineAfterOption = false;
+                htCurrentHelpText.MaximumDisplayWidth = 100;
+                htCurrentHelpText.Heading = Constants.cstrCurrentProjectName.Pastel(Color.Green);
+                htCurrentHelpText.Copyright = Constants.cstrCurrentProjectCopyrightLine1.Pastel(Color.LimeGreen) + Environment.NewLine + Constants.cstrCurrentProjectCopyrightLine2.Pastel(Color.LimeGreen);
+
+                htCurrentHelpText.AddPostOptionsLine($"* e.g.: Scan a single DVB-C transponder".Pastel(Color.Chocolate));
+                htCurrentHelpText.AddPostOptionsLine($"    --mode Scan --serverip 192.168.1.10 --serverport 554 --frequencies 346 --modulationsystem DVBC");
+                htCurrentHelpText.AddPostOptionsLine($"    --modulationtype T256QAM --symbolrate 6900");
+                htCurrentHelpText.AddPostOptionsLine($"");
+                htCurrentHelpText.AddPostOptionsLine($"* e.g.: Scan a DVB-C frequency range (start-end:step) and output the services".Pastel(Color.Chocolate));
+                htCurrentHelpText.AddPostOptionsLine($"    --mode Scan --serverip 192.168.1.10 --serverport 554 --frequencies 114,130-858:8");
+                htCurrentHelpText.AddPostOptionsLine($"    --modulationsystem DVBC --modulationtype T256QAM --symbolrate 6900 --printservices");
+                htCurrentHelpText.AddPostOptionsLine($"");
+                htCurrentHelpText.AddPostOptionsLine($"* e.g.: NIT based DVB-C scan - further transponders are taken from the network information table".Pastel(Color.Chocolate));
+                htCurrentHelpText.AddPostOptionsLine($"    --mode Scan --serverip 192.168.1.10 --serverport 554 --frequencies 138 --modulationsystem DVBC");
+                htCurrentHelpText.AddPostOptionsLine($"    --modulationtype T256QAM --symbolrate 6900 --nit");
+                htCurrentHelpText.AddPostOptionsLine($"");
+                htCurrentHelpText.AddPostOptionsLine($"* e.g.: Scan DVB-C services and export them to json and excel".Pastel(Color.Chocolate));
+                htCurrentHelpText.AddPostOptionsLine($"    --mode Scan --serverip 192.168.1.10 --serverport 554 --frequencies 346-362:8 --modulationsystem DVBC");
+                htCurrentHelpText.AddPostOptionsLine($"    --modulationtype T256QAM --symbolrate 6900 --exportservices --exportservicesexcel");
+                htCurrentHelpText.AddPostOptionsLine($"");
+                htCurrentHelpText.AddPostOptionsLine($"* e.g.: Scan DVB-C services with events, output the events and export them to json and excel".Pastel(Color.Chocolate));
+                htCurrentHelpText.AddPostOptionsLine($"    --mode Scan --serverip 192.168.1.10 --serverport 554 --frequencies 346 --modulationsystem DVBC");
+                htCurrentHelpText.AddPostOptionsLine($"    --modulationtype T256QAM --symbolrate 6900 --eit --printevents --exportevents --exporteventsexcel");
+                htCurrentHelpText.AddPostOptionsLine($"");
+                htCurrentHelpText.AddPostOptionsLine($"* e.g.: Scan DVB-C events of selected services only".Pastel(Color.Chocolate));
+                htCurrentHelpText.AddPostOptionsLine($"    --mode Scan --serverip 192.168.1.10 --serverport 554 --frequencies 346 --modulationsystem DVBC");
+                htCurrentHelpText.AddPostOptionsLine($"    --modulationtype T256QAM --symbolrate 6900 --eit --eitfiltersid 100,200 --printevents");
+                htCurrentHelpText.AddPostOptionsLine($"");
+                htCurrentHelpText.AddPostOptionsLine($"* e.g.: Scan a DVB-S transponder (satellite source 1, horizontal polarisation)".Pastel(Color.Chocolate));
+                htCurrentHelpText.AddPostOptionsLine($"    --mode Scan --serverip 192.168.1.10 --serverport 554 --frequencies 12188 --modulationsystem DVBS");
+                htCurrentHelpText.AddPostOptionsLine($"    --modulationtype TQPSK --symbolrate 27500 --satellitesource 1 --polarisation h");
+                htCurrentHelpText.AddPostOptionsLine($"");
+                htCurrentHelpText.AddPostOptionsLine($"* e.g.: Scan DVB-S2 transponders (satellite source 1, vertical polarisation)".Pastel(Color.Chocolate));
+                htCurrentHelpText.AddPostOptionsLine($"    --mode Scan --serverip 192.168.1.10 --serverport 554 --frequencies 11494,11523 --modulationsystem DVBS2");
+                htCurrentHelpText.AddPostOptionsLine($"    --modulationtype T8PSK --symbolrate 22000 --satellitesource 1 --polarisation v");
+                htCurrentHelpText.AddPostOptionsLine($"");
+                htCurrentHelpText.AddPostOptionsLine($"* e.g.: Scan DVB-T transponders (bandwidth 8 MHz)".Pastel(Color.Chocolate));
+                htCurrentHelpText.AddPostOptionsLine($"    --mode Scan --serverip 192.168.1.10 --serverport 554 --frequencies 474-858:8 --modulationsystem DVBT");
+                htCurrentHelpText.AddPostOptionsLine($"    --bandwidth 8");
+                htCurrentHelpText.AddPostOptionsLine($"");
+                htCurrentHelpText.AddPostOptionsLine($"* e.g.: Scan a DVB-T2 transponder (bandwidth 8 MHz, physical layer pipe 0)".Pastel(Color.Chocolate));
+                htCurrentHelpText.AddPostOptionsLine($"    --mode Scan --serverip 192.168.1.10 --serverport 554 --frequencies 538 --modulationsystem DVBT2");
+                htCurrentHelpText.AddPostOptionsLine($"    --bandwidth 8 --imagestreamidentifier 0");
+                htCurrentHelpText.AddPostOptionsLine($"");
+                htCurrentHelpText.AddPostOptionsLine($"* e.g.: Scan DVB-C with 5 retries per transponder and 5000 ms tuner lock grace time".Pastel(Color.Chocolate));
+                htCurrentHelpText.AddPostOptionsLine($"    --mode Scan --serverip 192.168.1.10 --serverport 554 --frequencies 346-858:8 --modulationsystem DVBC");
+                htCurrentHelpText.AddPostOptionsLine($"    --modulationtype T256QAM --symbolrate 6900 --scanretries 5 --tunerlockgracetime 5000");
+                htCurrentHelpText.AddPostOptionsLine($"");
+                htCurrentHelpText.AddPostOptionsLine($"* e.g.: Scan DVB-C via IPv6 with verbose (trace) output".Pastel(Color.Chocolate));
+                htCurrentHelpText.AddPostOptionsLine($"    --mode Scan --ipv6 --serverip fd00::10 --serverport 554 --frequencies 346 --modulationsystem DVBC");
+                htCurrentHelpText.AddPostOptionsLine($"    --modulationtype T256QAM --symbolrate 6900 --verbose");
+                htCurrentHelpText.AddPostOptionsLine($"");
+                htCurrentHelpText.AddPostOptionsLine($"* e.g.: Parse a Modified Julian Date to a normal date".Pastel(Color.Chocolate));
+                htCurrentHelpText.AddPostOptionsLine($"    --mode Parse --submode MJD --mjd 60000");
+                htCurrentHelpText.AddPostOptionsLine($"");
+
+                return HelpText.DefaultParsingErrorsHandler(prLocalParseResult, htCurrentHelpText);
+            }, e => e);
+
+            lCurrentLogger.Info(htCurrentHelpText);
+        }
+
+        /// <summary>
+        /// Program.DisplayHelpWithCustomCondition()
+        /// </summary>
+        /// <param name="saLocalCustomConditions"></param>
+        private static void DisplayHelpWithCustomCondition(string[] saLocalCustomConditions)
+        {
+            LogTrace("Program.DisplayHelpWithCustomCondition()");
+
+            var prCurrentParseResult = new Parser(x => { x.HelpWriter = null; }).ParseArguments<Options>(["--help"]);
+            var htCurrentHelpText = HelpText.AutoBuild(prCurrentParseResult, htCurrentHelpText =>
             {
                 htCurrentHelpText.AddNewLineBetweenHelpSections = true;
                 htCurrentHelpText.AdditionalNewLineAfterOption = false;
                 htCurrentHelpText.MaximumDisplayWidth = 100;
-                htCurrentHelpText.Heading = "KON.OctoScan.NET";
-                htCurrentHelpText.Copyright = "Copyright (C) 2016 Digital Devices GmbH" + Environment.NewLine + "Copyright (C) 2024 Oswald Oliver";
+                htCurrentHelpText.Heading = Constants.cstrCurrentProjectName.Pastel(Color.Green);
+                htCurrentHelpText.Copyright = Constants.cstrCurrentProjectCopyrightLine1.Pastel(Color.LimeGreen) + Environment.NewLine + Constants.cstrCurrentProjectCopyrightLine2.Pastel(Color.LimeGreen);
 
-                htCurrentHelpText.AddPostOptionsLine("* Notes on NIT scanning:");
-                htCurrentHelpText.AddPostOptionsLine("    With some cable providers or inhouse retransmission systems");
-                htCurrentHelpText.AddPostOptionsLine("    it may be not usable, i.e. due to wrong frequencies in the NIT.");
-                htCurrentHelpText.AddPostOptionsLine("");
-                htCurrentHelpText.AddPostOptionsLine("* Notes on hardware depencies:");
-                htCurrentHelpText.AddPostOptionsLine("    Depending on hardware configuration the scan will succeed even if");
-                htCurrentHelpText.AddPostOptionsLine("    some required parameters are wrong. This will result in a channel list");
-                htCurrentHelpText.AddPostOptionsLine("    which is usable only on the same hardware configuration.");
-                htCurrentHelpText.AddPostOptionsLine("");
-                htCurrentHelpText.AddPostOptionsLine("* Example: NIT based scan which should work on Unitymedia in Germany");
-                htCurrentHelpText.AddPostOptionsLine("    KON.OctoScan.NET --mode scan --frequencies=138 --modulationsystem=dvbc");
-                htCurrentHelpText.AddPostOptionsLine("                     --symbolrate=6900 --modulationtype=t256qam --nit 10.0.4.24");
-                htCurrentHelpText.AddPostOptionsLine("");
+                if (saLocalCustomConditions.Length > 0)
+                {
+                    htCurrentHelpText.AddPreOptionsLine("ERROR(S):");
 
-                return HelpText.DefaultParsingErrorsHandler(result, htCurrentHelpText);
+                    foreach (var strCurrentCustomCondition in saLocalCustomConditions)
+                    {
+                        if (!string.IsNullOrEmpty(strCurrentCustomCondition))
+                            htCurrentHelpText.AddPreOptionsLine($"  * Custom option '{strCurrentCustomCondition}' not met or missing.");
+                    }
+                }
+
+                return HelpText.DefaultParsingErrorsHandler(prCurrentParseResult, htCurrentHelpText);
             }, e => e);
 
-
             lCurrentLogger.Info(htCurrentHelpText);
-
-            WaitForKeyPress();
         }
 
-        [System.Diagnostics.Conditional("DEBUG")]
-        private static void WaitForKeyPress()
-        {
-            if (Console.IsInputRedirected)
-                return;
-
-            lCurrentLogger.Info("Press any key to continue ...".Pastel(ConsoleColor.Green));
-            Console.ReadKey();
-        }
-
+        /// <summary>
+        /// Program.Run()
+        /// </summary>
+        /// <param name="oLocalOptions"></param>
         private static void Run(Options oLocalOptions)
         {
+            LogTrace("Program.Run()");
+
             #if DEBUG
                 try
                 {
@@ -227,104 +271,174 @@ namespace KON.OctoScan.NET
                 catch (Exception) { /* Not supported by every terminal */ }
             #endif
 
-            oCurrentOptions = oLocalOptions;
-
-            switch (oLocalOptions.cloMode)
+            if (CreateFirewallRule())
             {
-                case FlagMode.parsedate:
+                string[] saLocalCustomCondition = [];
+
+                /* Check for custom conditions */
+                switch (oLocalOptions.cloMode)
                 {
-                    if (oLocalOptions.cloModifiedJulianDate is not ( >= 0 and <= ushort.MaxValue))
+                    case FlagMode.Scan:
                     {
-                        lCurrentLogger.Error("Error: --mjd with a value between 0 and 65535 is required for mode parsedate".Pastel(ConsoleColor.Red));
+                        if (oLocalOptions.cloSubMode != FlagSubMode.None)
+                            saLocalCustomCondition = [.. saLocalCustomCondition, "submode"];
+
+                        saLocalCustomCondition = string.IsNullOrEmpty(oLocalOptions.cloServerIP) ? [.. saLocalCustomCondition, "serverip"] : saLocalCustomCondition;
+                        saLocalCustomCondition = string.IsNullOrEmpty(oLocalOptions.cloServerPort) ? [.. saLocalCustomCondition, "serverport"] : saLocalCustomCondition;
+                        saLocalCustomCondition = string.IsNullOrEmpty(oLocalOptions.cloFrequencies) ? [.. saLocalCustomCondition, "frequencies"] : saLocalCustomCondition;
+
+                        if (oLocalOptions.cloModulationSystem == FlagModulationSystem.None)
+                            saLocalCustomCondition = [.. saLocalCustomCondition, "modulationsystem"];
+                        else
+                        {
+                            switch (oLocalOptions.cloModulationSystem)
+                            {
+                                case FlagModulationSystem.DVBC:
+                                {
+                                    if (oLocalOptions.cloModulationType == FlagModulationType.None)
+                                        saLocalCustomCondition = [.. saLocalCustomCondition, "modulationtype"];
+
+                                    if (oLocalOptions.cloSymbolRate is null or <= 0)
+                                        saLocalCustomCondition = [.. saLocalCustomCondition, "symbolrate"];
+
+                                    break;
+                                }
+                                case FlagModulationSystem.DVBS:
+                                case FlagModulationSystem.DVBS2:
+                                {
+                                    if (oLocalOptions.cloModulationType == FlagModulationType.None)
+                                        saLocalCustomCondition = [.. saLocalCustomCondition, "modulationtype"];
+
+                                    if (oLocalOptions.cloSatelliteSource is null or <= 0 or > 4)
+                                        saLocalCustomCondition = [.. saLocalCustomCondition, "satellitesource"];
+
+                                    if (string.IsNullOrEmpty(oLocalOptions.cloPolarisation) || !Constants.Polarisation2String.Contains(oLocalOptions.cloPolarisation, StringComparer.OrdinalIgnoreCase))
+                                        saLocalCustomCondition = [.. saLocalCustomCondition, "polarisation"];
+
+                                    if (oLocalOptions.cloSymbolRate is null or <= 0)
+                                        saLocalCustomCondition = [.. saLocalCustomCondition, "symbolrate"];
+                                    
+                                    break;
+                                }
+                                case FlagModulationSystem.DVBT:
+                                case FlagModulationSystem.DVBT2:
+                                {
+                                    if (string.IsNullOrEmpty(oLocalOptions.cloBandwidth) || !Constants.Bandwidth2String.Contains(oLocalOptions.cloBandwidth))
+                                        saLocalCustomCondition = [.. saLocalCustomCondition, "bandwidth"];
+
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (oLocalOptions.cloScanRetries is <= 0)
+                            saLocalCustomCondition = [.. saLocalCustomCondition, "scanretries"];
+
+                        if (oLocalOptions.cloTunerLockGraceTime is <= 0)
+                            saLocalCustomCondition = [.. saLocalCustomCondition, "tunerlockgracetime"];
+
+                        if (oLocalOptions.cloImageStreamIdentifier is not (null or (>= 0 and <= 255)))
+                            saLocalCustomCondition = [.. saLocalCustomCondition, "imagestreamidentifier"];
+
                         break;
                     }
+                    case FlagMode.Parse:
+                    {
+                        switch (oLocalOptions.cloSubMode)
+                        {
+                            case FlagSubMode.None:
+                            {
+                                saLocalCustomCondition = [.. saLocalCustomCondition, "submode"];
+                                break;
+                            }
+                            case FlagSubMode.MJD:
+                            {
+                                if (oLocalOptions.cloModifiedJulianDate is not (>= 0 and <= ushort.MaxValue))
+                                    saLocalCustomCondition = [.. saLocalCustomCondition, "mjd"];
 
-                    lCurrentLogger.Info($"Date = {GetDateFromModifiedJulianDate((int)oLocalOptions.cloModifiedJulianDate):dd.MM.yyyy}".Pastel(ConsoleColor.Cyan));
+                                break;
+                            }
+                        }
 
-                    break;
+                        break;
+                    }
                 }
-                case FlagMode.scan:
+                /* End-Check for custom conditions */
+
+                // Show help dialog if custom conditions are not met
+                if (saLocalCustomCondition.Length > 0)
+                    DisplayHelpWithCustomCondition(saLocalCustomCondition);
+                // Do operation if all custom conditions are met
+                else
                 {
-                    if (!ValidateScanOptions(oLocalOptions))
-                        break;
-
-                    if (!CreateFirewallRule())
+                    switch (oLocalOptions.cloMode)
                     {
-                        lCurrentLogger.Error("Firewall rule has not been created as there are not sufficient permissions or wrong operation system used. Operation stopped!".Pastel(ConsoleColor.Red));
-                        break;
+                        case FlagMode.Scan:
+                        {
+                            using var osiCurrentOSScanIP = new OSScanIP();
+                            osiCurrentOSScanIP.Init(oLocalOptions.cloServerIP);
+
+                            foreach (var iCurrentFrequency in ParseFrequencies(oLocalOptions.cloFrequencies!))
+                                osiCurrentOSScanIP.AddTransponderInfo(CreateTransponderInfo(oLocalOptions, iCurrentFrequency));
+
+                            osiCurrentOSScanIP.Scan(oLocalOptions);
+                            bDone = true;
+
+                            foreach (var otiCurrentOSTransponderInfo in osiCurrentOSScanIP.olotiOSListOSTransponderInfoDone?.OfType<OSTransponderInfo>() ?? [])
+                            {
+                                if (oLocalOptions is { cloEventInformationTable: true, cloPrintEvents: true })
+                                    otiCurrentOSTransponderInfo.PrintEvents();
+
+                                if (oLocalOptions.cloPrintServices)
+                                    otiCurrentOSTransponderInfo.PrintServices();
+                            }
+
+                            if (oLocalOptions.cloExportServices)
+                                osiCurrentOSScanIP.ExportServicesToJson();
+
+                            if (oLocalOptions.cloExportServicesExcel)
+                                osiCurrentOSScanIP.ExportServicesToExcel();
+
+                            if (oLocalOptions is { cloEventInformationTable: true, cloExportEvents: true })
+                                osiCurrentOSScanIP.ExportEventsToJson();
+
+                            if (oLocalOptions is { cloEventInformationTable: true, cloExportEventsExcel: true })
+                                osiCurrentOSScanIP.ExportEventsToExcel();
+
+                            var losCurrentServices = osiCurrentOSScanIP.olotiOSListOSTransponderInfoDone?.OfType<OSTransponderInfo>().SelectMany(otiCurrentOSTransponderInfo => otiCurrentOSTransponderInfo.olosOSListOSService).ToList() ?? [];
+
+                            lCurrentLogger.Info($"-» SCAN    Transponders: {osiCurrentOSScanIP.olotiOSListOSTransponderInfoDone?.Count ?? 0}    Services: {losCurrentServices.Count}".Pastel(ConsoleColor.Cyan));
+
+                            if (oLocalOptions is { cloEventInformationTable: true, cloPrintEvents: true })
+                            {
+                                lCurrentLogger.Info($"-» EIT     Services: {losCurrentServices.Count(osCurrentOSService => osCurrentOSService.oloeOSListOSEvent.Count > 0)}    Events: {losCurrentServices.Sum(osCurrentOSService => osCurrentOSService.oloeOSListOSEvent.Count)}".Pastel(ConsoleColor.Cyan));
+                                lCurrentLogger.Info($"-» EIT     Received sections: {iEITSections}    Total size: {iEITSize}    Short size: {iEITShortSize}    Events dropped by version change: {iEITEventsDeleted}".Pastel(ConsoleColor.Cyan));
+                            }
+
+                            break;
+                        }
+                        case FlagMode.Parse:
+                        {
+                            switch (oLocalOptions.cloSubMode)
+                            {
+                                case FlagSubMode.MJD:
+                                {
+                                    lCurrentLogger.Info($"-» {Constants.cstrCurrentProjectName}.MJD {(oLocalOptions.cloModifiedJulianDate != null ? (int)oLocalOptions.cloModifiedJulianDate : 0)} to System.DateOnly = {GetDateFromModifiedJulianDate((oLocalOptions.cloModifiedJulianDate != null ? (int)oLocalOptions.cloModifiedJulianDate : 0)):dd.MM.yyyy}".Pastel(ConsoleColor.Cyan));
+                                    break;
+                                }
+                            }
+                            
+                            break;
+                        }
                     }
-
-                    using var osiCurrentOSScanIP = new OSScanIP();
-                    osiCurrentOSScanIP.Init(oLocalOptions.cloServerIP);
-
-                    foreach (var iCurrentFrequency in ParseFrequencies(oLocalOptions.cloFrequenciesInMHz!))
-                        osiCurrentOSScanIP.AddTransponderInfo(CreateTransponderInfo(oLocalOptions, iCurrentFrequency));
-
-                    osiCurrentOSScanIP.Scan(iLocalScanRetries: oLocalOptions.cloScanRetries, iLocalTunerLockGraceTime: oLocalOptions.cloTunerLockGraceTime, iLocalServerPort: oLocalOptions.cloServerPort);
-                    bDone = true;
-
-                    if (oLocalOptions.cloExportServices)
-                        osiCurrentOSScanIP.ExportServicesToJson();
-
-                    if (oLocalOptions.cloExportServicesExcel)
-                        osiCurrentOSScanIP.ExportServicesToExcel();
-
-                    if (oLocalOptions is { cloEventInformationTable: true, cloExportEvents: true })
-                        osiCurrentOSScanIP.ExportEventsToJson();
-
-                    if (oLocalOptions is { cloEventInformationTable: true, cloExportEventsExcel: true })
-                        osiCurrentOSScanIP.ExportEventsToExcel();
-
-                    var losCurrentServices = osiCurrentOSScanIP.olotiOSListOSTransponderInfoDone?.OfType<OSTransponderInfo>().SelectMany(otiCurrentOSTransponderInfo => otiCurrentOSTransponderInfo.olosOSListOSService).ToList() ?? [];
-
-                    lCurrentLogger.Info($"SCAN    Transponders: {osiCurrentOSScanIP.olotiOSListOSTransponderInfoDone?.Count ?? 0}    Services: {losCurrentServices.Count}".Pastel(ConsoleColor.Cyan));
-
-                    if (oLocalOptions.cloEventInformationTable)
-                    {
-                        lCurrentLogger.Info($"EIT     Services: {losCurrentServices.Count(osCurrentOSService => osCurrentOSService.oloeOSListOSEvent.Count > 0)}    Events: {losCurrentServices.Sum(osCurrentOSService => osCurrentOSService.oloeOSListOSEvent.Count)}".Pastel(ConsoleColor.Cyan));
-                        lCurrentLogger.Info($"EIT     Received sections: {iEITSections}    Total size: {iEITSize}    Short size: {iEITShortSize}    Events dropped by version change: {iEITEventsDeleted}".Pastel(ConsoleColor.Cyan));
-                    }
-
-                    break;
                 }
+            }
+            else
+            {
+                lCurrentLogger.Error("-» Firewall rule has not been created as there are not sufficient permissions or wrong operation system used. Operation stopped!".Pastel(ConsoleColor.Red));
             }
 
             WaitForKeyPress();
-        }
-
-        private static bool ValidateScanOptions(Options oLocalOptions)
-        {
-            var lsCurrentErrors = new List<string>();
-
-            if (string.IsNullOrWhiteSpace(oLocalOptions.cloServerIP))
-                lsCurrentErrors.Add("<server ip> is required");
-
-            if (string.IsNullOrWhiteSpace(oLocalOptions.cloFrequenciesInMHz))
-                lsCurrentErrors.Add("--frequencies is required");
-
-            switch (oLocalOptions.cloModulationSystem)
-            {
-                case null:
-                    lsCurrentErrors.Add("--modulationsystem is required");
-                    break;
-                case FlagModulationSystem.dvbc or FlagModulationSystem.dvbs or FlagModulationSystem.dvbs2 when oLocalOptions.cloSymbolRateInkSymbols is null:
-                    lsCurrentErrors.Add($"--symbolrate is required for {oLocalOptions.cloModulationSystem}");
-                    break;
-            }
-
-            if (!string.IsNullOrEmpty(oLocalOptions.cloPolarisation) && !Polarisation2String.Contains(oLocalOptions.cloPolarisation))
-                lsCurrentErrors.Add($"--polarisation must be one of {string.Join(",", Polarisation2String)}");
-
-            if (!string.IsNullOrEmpty(oLocalOptions.cloBandwidth) && !Bandwidth2String.Contains(oLocalOptions.cloBandwidth))
-                lsCurrentErrors.Add($"--bandwidth must be one of {string.Join(",", Bandwidth2String)}");
-
-            if (oLocalOptions.cloTunerLockGraceTime < 0)
-                lsCurrentErrors.Add("--tunerlockgracetime must not be negative");
-
-            foreach (var strCurrentError in lsCurrentErrors)
-                lCurrentLogger.Error($"Error: {strCurrentError}".Pastel(ConsoleColor.Red));
-
-            return lsCurrentErrors.Count == 0;
         }
     }
 }

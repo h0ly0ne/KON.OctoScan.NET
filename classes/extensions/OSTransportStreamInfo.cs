@@ -1,6 +1,4 @@
-﻿using Pastel;
-
-using static KON.OctoScan.NET.Constants;
+﻿using static KON.OctoScan.NET.Constants;
 using static KON.OctoScan.NET.Global;
 
 namespace KON.OctoScan.NET;
@@ -41,6 +39,13 @@ public static class OSTransportStreamInfo_Extension
             if (otsiLocalOSTransportStreamInfo.bRTPClockFallback || !otsiLocalOSTransportStreamInfo.bRTPTimestampValid)
             {
                 otsiLocalOSTransportStreamInfo.lStreamClock += otsiLocalOSTransportStreamInfo.bRTPTimestampValid ? lWallElapsedTicks : 0;
+
+                if (!otsiLocalOSTransportStreamInfo.bRTPTimestampValid)
+                {
+                    otsiLocalOSTransportStreamInfo.lFirstDataWallTime = Environment.TickCount64;
+                    otsiLocalOSTransportStreamInfo.lFirstDataStreamClock = otsiLocalOSTransportStreamInfo.lStreamClock;
+                }
+
                 otsiLocalOSTransportStreamInfo.uiLastRTPTimestamp = uiLocalRTPTimestamp.Value;
                 otsiLocalOSTransportStreamInfo.bRTPTimestampValid = true;
                 otsiLocalOSTransportStreamInfo.lIdleCredit = 0;
@@ -59,11 +64,11 @@ public static class OSTransportStreamInfo_Extension
                 otsiLocalOSTransportStreamInfo.lStreamClock += lWallElapsedTicks;
                 otsiLocalOSTransportStreamInfo.lRTPClockStall = 0;
 
-                if (++otsiLocalOSTransportStreamInfo.iRTPClockDiscontinuities >= RTP_CLOCK_MAX_DISCONTINUITIES)
-                {
-                    lCurrentLogger.Warn("Warning: RTP timestamps are not continuous - filter timeouts use the wall clock".Pastel(ConsoleColor.Yellow));
-                    otsiLocalOSTransportStreamInfo.bRTPClockFallback = true;
-                }
+                if (++otsiLocalOSTransportStreamInfo.iRTPClockDiscontinuities < RTP_CLOCK_MAX_DISCONTINUITIES) 
+                    return;
+                
+                LogTrace("RTP timestamps are not continuous - filter timeouts use the wall clock");
+                otsiLocalOSTransportStreamInfo.bRTPClockFallback = true;
 
                 return;
             }
@@ -74,18 +79,32 @@ public static class OSTransportStreamInfo_Extension
             {
                 otsiLocalOSTransportStreamInfo.lRTPClockStall += lLocalWallElapsed;
 
-                if (otsiLocalOSTransportStreamInfo.lRTPClockStall > RTP_CLOCK_STALL_LIMIT)
-                {
-                    lCurrentLogger.Warn("Warning: RTP timestamps are not advancing - filter timeouts use the wall clock".Pastel(ConsoleColor.Yellow));
-                    otsiLocalOSTransportStreamInfo.bRTPClockFallback = true;
-                    otsiLocalOSTransportStreamInfo.lStreamClock += otsiLocalOSTransportStreamInfo.lRTPClockStall * RTP_CLOCK_TICKS_PER_MS;
-                }
+                if (otsiLocalOSTransportStreamInfo.lRTPClockStall <= RTP_CLOCK_STALL_LIMIT) 
+                    return;
+                
+                LogTrace("RTP timestamps are not advancing - filter timeouts use the wall clock");
+                otsiLocalOSTransportStreamInfo.bRTPClockFallback = true;
+                otsiLocalOSTransportStreamInfo.lStreamClock += otsiLocalOSTransportStreamInfo.lRTPClockStall * RTP_CLOCK_TICKS_PER_MS;
 
                 return;
             }
 
             otsiLocalOSTransportStreamInfo.lRTPClockStall = 0;
             otsiLocalOSTransportStreamInfo.lStreamClock += lAdvanceTicks;
+
+            var lMaximumStreamClock = otsiLocalOSTransportStreamInfo.lFirstDataStreamClock + (Environment.TickCount64 - otsiLocalOSTransportStreamInfo.lFirstDataWallTime + RTP_CLOCK_MAX_AHEAD) * RTP_CLOCK_TICKS_PER_MS;
+
+            if (otsiLocalOSTransportStreamInfo.lStreamClock <= lMaximumStreamClock)
+                return;
+
+            var lCurrentAhead = (otsiLocalOSTransportStreamInfo.lStreamClock - lMaximumStreamClock) / RTP_CLOCK_TICKS_PER_MS + RTP_CLOCK_MAX_AHEAD;
+            otsiLocalOSTransportStreamInfo.lStreamClock = lMaximumStreamClock;
+
+            if (lCurrentAhead <= RTP_CLOCK_MAX_AHEAD_FALLBACK) 
+                return;
+            
+            LogTrace($"RTP clock runs faster than real time ({lCurrentAhead} ms ahead) - filter timeouts use the wall clock");
+            otsiLocalOSTransportStreamInfo.bRTPClockFallback = true;
         }
 
         /// <summary>
@@ -101,6 +120,8 @@ public static class OSTransportStreamInfo_Extension
 
             if (opiiCurrentOSPacketIdentifierInfo is not { bUsed: true })
                 return;
+
+            opiiCurrentOSPacketIdentifierInfo.iPacketsReceived++;
 
             if (opiiCurrentOSPacketIdentifierInfo.byaBuffer == null)
             {

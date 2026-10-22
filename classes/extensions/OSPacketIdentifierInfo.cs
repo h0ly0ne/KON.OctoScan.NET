@@ -27,10 +27,7 @@ public static class OSPacketIdentifierInfo_Extension
             if (bIsValid)
                 opiiLocalOSPacketIdentifierInfo.byContinuityCounter = byCurrentContinuityCounter;
             else
-            {
                 opiiLocalOSPacketIdentifierInfo.Reset();
-                opiiLocalOSPacketIdentifierInfo.bHasContinuityErrors = true;
-            }
 
             return bIsValid;
         }
@@ -102,6 +99,10 @@ public static class OSPacketIdentifierInfo_Extension
             var byCurrentVersionNumber = (byte)((byaCurrentBuffer[5] & 0x3E) >> 1);
             var byCurrentSectionNumber = byaCurrentBuffer[6];
             var byCurrentLastSectionNumber = byaCurrentBuffer[7];
+            var otsiCurrentOSTransportStreamInfo = opiiLocalOSPacketIdentifierInfo.otsiOSTransportStreamInfo;
+
+            if (byCurrentTableID is DEFAULT_TID_PA or DEFAULT_TID_SD && otsiCurrentOSTransportStreamInfo is { iStaleTransportStreamID: >= 0 } && iCurrentTableExtension == otsiCurrentOSTransportStreamInfo.iStaleTransportStreamID && Environment.TickCount64 < otsiCurrentOSTransportStreamInfo.lStaleTransportStreamUntil)
+                return;
 
             for (var llnCurrentNode = olotsfCurrentOSListOSTransportStreamFilter.First; llnCurrentNode != null; llnCurrentNode = llnCurrentNode.Next)
             {
@@ -155,7 +156,7 @@ public static class OSPacketIdentifierInfo_Extension
                     {
                         var byTableIDLimit = (byte)(byaCurrentBuffer[13] & 0x0F);
                         for (var j = 1; j <= byTableIDLimit; j++)
-                            opiiLocalOSPacketIdentifierInfo.otsiOSTransportStreamInfo?.ostOSScanTransponder?.AddSFilter(DEFAULT_PID_EIT, (byte)(byCurrentTableID + j), otsfCurrentOSTransportStreamFilter.iTableExtension, 2, j < 2 ? 15 : 45);
+                            opiiLocalOSPacketIdentifierInfo.otsiOSTransportStreamInfo?.ostOSScanTransponder?.AddSFilter(DEFAULT_PID_EIT, (byte)(byCurrentTableID + j), otsfCurrentOSTransportStreamFilter.iTableExtension, 2, j < 2 ? FILTER_TIMEOUT_EIT : FILTER_TIMEOUT_EIT_SCHEDULE);
                     }
                 }
 
@@ -168,15 +169,10 @@ public static class OSPacketIdentifierInfo_Extension
                 {
                     bTableResult = byCurrentTableID switch
                     {
-                        // PAT - Program Association Table
                         0x00 => otsfCurrentOSTransportStreamFilter.AddProgramAssociationTableData(),
-                        // PMT - Program Map Table
                         0x02 => otsfCurrentOSTransportStreamFilter.AddProgramMapTableData(),
-                        // NIT - Network Information Table (actual)
                         0x40 => otsfCurrentOSTransportStreamFilter.AddNetworkInformationTableData(),
-                        // SDT - Service Description Table (actual)
                         0x42 => otsfCurrentOSTransportStreamFilter.AddServiceDescriptionTableData(),
-                        // EIT - Event Information Table (present/following actual and other, Schedule actual and other)
                         >= 0x4E and <= 0x6F => otsfCurrentOSTransportStreamFilter.AddEventInformationTableData(bDoEITRefresh),
                         _ => false
                     };
@@ -236,7 +232,6 @@ public static class OSPacketIdentifierInfo_Extension
                 return false;
             }
 
-            // Continuation of a section started in a previous packet
             if (opiiLocalOSPacketIdentifierInfo.ValidateContinuityCounter(rosLocalPacket) && iOffset != 0 && opiiLocalOSPacketIdentifierInfo.iBufferPointer != 0)
             {
                 var iOffsetAdapted = iOffset;
@@ -258,7 +253,6 @@ public static class OSPacketIdentifierInfo_Extension
 
             iIndex += iOffset;
 
-            // New sections starting within this packet
             while ((iToDo = TS_PACKET_LENGTH - iIndex) > 0 && rosLocalPacket[iIndex] != 0xFF)
             {
                 opiiLocalOSPacketIdentifierInfo.Reset();

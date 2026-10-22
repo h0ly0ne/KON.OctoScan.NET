@@ -14,20 +14,16 @@ namespace KON.OctoScan.NET;
 public static class Global
 {
     public static readonly Logger lCurrentLogger = LogManager.GetCurrentClassLogger();
-
     public static Options? oCurrentOptions;
-
-    public static bool bDone = false;
-    
-    public static int iEITSize = 0;
-    public static int iEITSections = 0;
-    public static int iEITShortSize = 0;
-    public static int iEITEventsDeleted = 0;
-
     private static Encoding? eISO6937Encoding;
     private static readonly Dictionary<int, Encoding> dieISO8859Encodings = [];
     private static readonly Dictionary<string, string> dssEventLanguages = new(StringComparer.OrdinalIgnoreCase);
 
+    public static bool bDone = false;
+    public static int iEITSize = 0;
+    public static int iEITSections = 0;
+    public static int iEITShortSize = 0;
+    public static int iEITEventsDeleted = 0;
     private const int NET_FW_IP_PROTOCOL_TCP = 6;
     private const int NET_FW_IP_PROTOCOL_UDP = 17;
     private const int NET_FW_RULE_DIR_IN = 1;
@@ -396,5 +392,112 @@ public static class Global
 
         dssEventLanguages[strLocalLanguageCode] = strCurrentLanguageCode;
         return strCurrentLanguageCode;
+    }
+
+    /// <summary>
+    /// Global.ParseFrequencies()
+    /// </summary>
+    /// <param name="strLocalFrequencies"></param>
+    /// <returns>List(int)</returns>
+    public static List<int> ParseFrequencies(string strLocalFrequencies)
+    {
+        LogTrace("Global.ParseFrequencies()");
+
+        var liCurrentFrequencies = new List<int>();
+
+        foreach (var strCurrentFrequency in strLocalFrequencies.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var saCurrentRange = strCurrentFrequency.Split(['-', ':']);
+
+            if (saCurrentRange.Length == 1 && int.TryParse(saCurrentRange[0], out var iCurrentFrequency))
+            {
+                liCurrentFrequencies.Add(iCurrentFrequency);
+            }
+            else if (saCurrentRange.Length == 3 && int.TryParse(saCurrentRange[0], out var iRangeStart) && int.TryParse(saCurrentRange[1], out var iRangeEnd) && int.TryParse(saCurrentRange[2], out var iRangeStep) && iRangeStep > 0 && iRangeEnd >= iRangeStart)
+            {
+                if ((iRangeEnd - iRangeStart) % iRangeStep != 0)
+                    lCurrentLogger.Warn($"-» Frequency range {strCurrentFrequency} does not end on a step - last frequency is {iRangeEnd - (iRangeEnd - iRangeStart) % iRangeStep}".Pastel(ConsoleColor.Yellow));
+
+                for (var iCurrentRangeFrequency = iRangeStart; iCurrentRangeFrequency <= iRangeEnd; iCurrentRangeFrequency += iRangeStep)
+                    liCurrentFrequencies.Add(iCurrentRangeFrequency);
+            }
+            else
+                lCurrentLogger.Warn($"-» Invalid frequency or frequency range {strCurrentFrequency} skipped".Pastel(ConsoleColor.Yellow));
+        }
+
+        return liCurrentFrequencies;
+    }
+
+    /// <summary>
+    /// Global.CreateTransponderInfo()
+    /// </summary>
+    /// <param name="oLocalOptions"></param>
+    /// <param name="iLocalFrequency"></param>
+    /// <returns>OSTransponderInfo</returns>
+    public static OSTransponderInfo CreateTransponderInfo(Options oLocalOptions, int iLocalFrequency)
+    {
+        LogTrace("Global.CreateTransponderInfo()");
+
+        var otiCurrentOSTransponderInfo = new OSTransponderInfo
+        {
+            iFrequency = iLocalFrequency,
+            iModulationSystem = Array.IndexOf(ModulationSystem2String, oLocalOptions.cloModulationSystem.ToString()),
+            iSymbolRate = oLocalOptions.cloSymbolRateInkSymbols ?? 0,
+            iSource = oLocalOptions.cloSatelliteSource ?? 0,
+            bUseNetworkInformationTable = oLocalOptions.cloNetworkInformationTable,
+            bScanEventInformationTable = oLocalOptions.cloEventInformationTable,
+            iInputStreamID = oLocalOptions.cloPhysicalLayerPipes is >= 0 and <= 255 ? oLocalOptions.cloPhysicalLayerPipes.Value : 0
+        };
+
+        if (oLocalOptions.cloModulationType != null)
+            otiCurrentOSTransponderInfo.iModulationType = Math.Max(Array.IndexOf(ModulationType2String, oLocalOptions.cloModulationType.ToString()?[1..]), 0);
+
+        if (!string.IsNullOrEmpty(oLocalOptions.cloPolarisation))
+            otiCurrentOSTransponderInfo.iPolarisation = Array.IndexOf(Polarisation2String, oLocalOptions.cloPolarisation);
+
+        if (!string.IsNullOrEmpty(oLocalOptions.cloBandwidth))
+            otiCurrentOSTransponderInfo.iBandwidth = Array.IndexOf(Bandwidth2String, oLocalOptions.cloBandwidth);
+
+        if (string.IsNullOrEmpty(oLocalOptions.cloEventInformationTableSIDFilter)) 
+            return otiCurrentOSTransponderInfo;
+        
+        var iCurrentServiceIDCounter = 0;
+
+        foreach (var strCurrentServiceID in oLocalOptions.cloEventInformationTableSIDFilter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(MAX_EIT_SID))
+        {
+            if (int.TryParse(strCurrentServiceID, out var iCurrentServiceID))
+                otiCurrentOSTransponderInfo.iaEventInformationTableServiceID[iCurrentServiceIDCounter++] = iCurrentServiceID;
+            else
+                lCurrentLogger.Warn($"-» Invalid service id {strCurrentServiceID} in --eitfiltersid skipped".Pastel(ConsoleColor.Yellow));
+        }
+
+        return otiCurrentOSTransponderInfo;
+    }
+
+    /// <summary>
+    /// Global.CreateTransponderInfo()
+    /// </summary>
+    /// <param name="iLocalFrequency"></param>
+    /// <param name="iModulationSystem"></param>
+    /// <param name="iSymbolRate"></param>
+    /// <param name="iModulationType"></param>
+    /// <returns>OSTransponderInfo</returns>
+    public static OSTransponderInfo CreateTransponderInfo(int iLocalFrequency, int iModulationSystem, int iSymbolRate, int iModulationType)
+    {
+        LogTrace("Global.CreateTransponderInfo()");
+
+        var otiCurrentOSTransponderInfo = new OSTransponderInfo
+        {
+            iFrequency = iLocalFrequency,
+            iModulationSystem = iModulationSystem,
+            iModulationType = iModulationType,
+            iSymbolRate = iSymbolRate,
+            iSource = 0,
+            bUseNetworkInformationTable = false,
+            bScanEventInformationTable = false,
+            iInputStreamID =0
+        };
+
+        return otiCurrentOSTransponderInfo;
     }
 }

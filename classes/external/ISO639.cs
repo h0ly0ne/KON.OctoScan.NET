@@ -8,8 +8,7 @@ public record ISO639Language
 {
     public string ISO6393Code
     {
-        get; 
-        private set;
+        get;
     }
 
     public string? ISO6392Code

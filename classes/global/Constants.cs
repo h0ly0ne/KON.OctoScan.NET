@@ -5,61 +5,63 @@ public static class Constants
     public const string FIREWALL_RULE_APP_NAME = "KON.OctoScan.NET";
 
     public const int MAX_EIT_SID = 64;
-    public const int MAX_EMPTY_PACKETS = 20;
     public const int RETRY_WAITTIME = 1000;
-
     public const string RTSP_VERSION = "RTSP/1.0";
     public const string RTSP_NEWLINE = "\r\n";
     public const int RTSP_RECEIVE_TIMEOUT = 5000;
     public const int RTSP_SETUP_TIMEOUT = 15000;
     public const int RTSP_SLOW_RESPONSE_WARNING = 2000;
-
     public const int CHANNEL_CHANGE_SETTLE_TIME = 300;
     public const int CHANNEL_CHANGE_MAX_WAIT = 3000;
+    public const int STALE_TRANSPORT_STREAM_WINDOW = 5000;
     public const int RTSP_RESPONSE_COMPLETION_WAIT = 250;
     public const int RTSP_DEFAULT_SESSION_TIMEOUT = 60;
-
+    public const int PID_UPDATE_MIN_INTERVAL = 250;
+    public const int FILTER_TIMEOUT_PAT = 5;
+    public const int FILTER_TIMEOUT_SDT = 5;
+    public const int FILTER_TIMEOUT_PMT = 5;
+    public const int FILTER_TIMEOUT_NIT = 15;
+    public const int FILTER_TIMEOUT_EIT = 15;
+    public const int FILTER_TIMEOUT_EIT_SCHEDULE = 45;
+    public const int FILTER_TIMEOUT_PMT_SECOND_PASS = 30;
+    public const int PID_REFRESH_TIMEOUT = 1000;
+    public const int MAX_PID_REFRESHES = 2;
     public static readonly int[] RTSP_TRANSIENT_STATUS_CODES = [408, 453, 454, 500, 503];
-
     public const int RTP_HEADER_LENGTH = 12;
     public const int RTCP_PACKET_TYPE_APP = 204;
-
     public const int RTP_CLOCK_TICKS_PER_MS = 90;
     public const int RTP_CLOCK_MAX_JUMP = 5000;
     public const int RTP_CLOCK_STALL_LIMIT = 2000;
     public const int RTP_CLOCK_MAX_REORDER = 1000;
     public const int RTP_CLOCK_MAX_DISCONTINUITIES = 10;
+    public const int RTP_CLOCK_MAX_AHEAD = 500;
+    public const int RTP_CLOCK_MAX_AHEAD_FALLBACK = 1000;
     public const int TUNER_LOCK_GRACE_TIME = 3000;
     public const int UDP_PORT_PAIR_BIND_ATTEMPTS = 10;
     public const int UDP_RECEIVE_BUFFER_SIZE = 4 * 1024 * 1024;
     public const int UDP_DATAGRAM_BUFFER_SIZE = 65536;
-
     public const int TS_PACKET_LENGTH = 188;
     public const byte TS_SYNC_BYTE = 0x47;
     public const int TS_PID_COUNT = 8192;
     public const int MAX_SECTION_LENGTH = 4096;
-
     public const int DEFAULT_PID_PAT = 0x00;
     public const int DEFAULT_PID_NIT = 0x10;
     public const int DEFAULT_PID_SDT = 0x11;
     public const int DEFAULT_PID_EIT = 0x12;
-
     public const int DEFAULT_TID_PA = 0x00;
     public const int DEFAULT_TID_PM = 0x02;
     public const int DEFAULT_TID_NI_CURRENT = 0x40;
     public const int DEFAULT_TID_SD = 0x42;
     public const int DEFAULT_TID_EI = 0x50;
-
     public const int DESCRIPTORTAG_SERVICE_DESCRIPTOR = 0x48;
     public const int DESCRIPTORTAG_SHORT_EVENT_DESCRIPTOR = 0x4D;
     public const int DESCRIPTORTAG_SATELLITE_DELIVERY_SYSTEM_DESCRIPTOR = 0x43;
     public const int DESCRIPTORTAG_CABLE_DELIVERY_SYSTEM_DESCRIPTOR = 0x44;
-
+    public static readonly byte[] EXTENSION_DESCRIPTOR_AUDIO_TAGS = [0x06, 0x0E, 0x0F, 0x15, 0x21];
     public static readonly string[] ModulationSystem2String = ["undef", "dvbc", "dvbcb", "dvbt", "dss", "dvbs", "dvbs2", "dvbh", "isdbt", "isdbs", "isdbc", "atsc", "atscmh", "dtmb", "cmmb", "dab", "dvbt2", "turbo", "dvbcc", "dvbc2"];
     public static readonly string[] ModulationType2String = ["qpsk", "16qam", "32qam", "64qam", "128qam", "256qam", "autoqam", "8vsb", "16vsb", "8psk", "16apsk", "32apsk", "dqpsk", "4qamnr"];
     public static readonly string[] Polarisation2String = ["v", "h", "r", "l"];
     public static readonly string[] Bandwidth2String = ["8", "7", "6", "auto", "5", "10", "1.712"];
-
     public const int CCT_ENCODING_ISO_8859_5 = 0x01;
     public const int CCT_ENCODING_ISO_8859_15 = 0x0B;
     public const int CCT_ENCODING_ISO_8859_DYNAMIC_PARTS = 0x10;
@@ -114,7 +116,6 @@ public static class Constants
         0x89b8fd09, 0x8d79e0be, 0x803ac667, 0x84fbdbd0, 0x9abc8bd5, 0x9e7d9662,
         0x933eb0bb, 0x97ffad0c, 0xafb010b1, 0xab710d06, 0xa6322bdf, 0xa2f33668,
         0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4 ];
-
     public const float EXCEL_PIXEL_TO_WIDTH_CONSTANT = (float)(8.43 / 64);
     public const float EXCEL_CHARACTER_TO_WIDTH_CONSTANT = 8 * EXCEL_PIXEL_TO_WIDTH_CONSTANT;
     public const float EXCEL_MAXIMUM_COLUMN_WIDTH = 100;

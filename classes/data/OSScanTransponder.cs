@@ -17,4 +17,5 @@ public class OSScanTransponder
     public int iTunerQuality;
     public bool bTunerStatusReceived;
     public bool bTunerFrequencyConfirmed;
+    public int iLastTransportStreamID = -1;
 }

@@ -6,6 +6,8 @@ public class OSService
     public List<int> liAudioPacketIdentifiers = [];
     public List<byte> lbAudioPacketIdentifiersStreamType = [];
     public List<string> lsAudioPacketIdentifiersLanguage = [];
+    public List<int> liOtherPacketIdentifiers = [];
+    public List<byte> lbOtherPacketIdentifiersStreamType = [];
 
     public string strProviderName = string.Empty;
     public string strName = string.Empty;

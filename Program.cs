@@ -224,10 +224,7 @@ namespace KON.OctoScan.NET
                     if (OperatingSystem.IsWindows())
                         Console.BufferHeight = short.MaxValue - 1;
                 }
-                catch (Exception)
-                {
-                    // Not supported by every terminal
-                }
+                catch (Exception) { /* Not supported by every terminal */ }
             #endif
 
             oCurrentOptions = oLocalOptions;
@@ -257,38 +254,35 @@ namespace KON.OctoScan.NET
                         break;
                     }
 
-                    using (var osiCurrentOSScanIP = new OSScanIP())
+                    using var osiCurrentOSScanIP = new OSScanIP();
+                    osiCurrentOSScanIP.Init(oLocalOptions.cloServerIP);
+
+                    foreach (var iCurrentFrequency in ParseFrequencies(oLocalOptions.cloFrequenciesInMHz!))
+                        osiCurrentOSScanIP.AddTransponderInfo(CreateTransponderInfo(oLocalOptions, iCurrentFrequency));
+
+                    osiCurrentOSScanIP.Scan(iLocalScanRetries: oLocalOptions.cloScanRetries, iLocalTunerLockGraceTime: oLocalOptions.cloTunerLockGraceTime, iLocalServerPort: oLocalOptions.cloServerPort);
+                    bDone = true;
+
+                    if (oLocalOptions.cloExportServices)
+                        osiCurrentOSScanIP.ExportServicesToJson();
+
+                    if (oLocalOptions.cloExportServicesExcel)
+                        osiCurrentOSScanIP.ExportServicesToExcel();
+
+                    if (oLocalOptions is { cloEventInformationTable: true, cloExportEvents: true })
+                        osiCurrentOSScanIP.ExportEventsToJson();
+
+                    if (oLocalOptions is { cloEventInformationTable: true, cloExportEventsExcel: true })
+                        osiCurrentOSScanIP.ExportEventsToExcel();
+
+                    var losCurrentServices = osiCurrentOSScanIP.olotiOSListOSTransponderInfoDone?.OfType<OSTransponderInfo>().SelectMany(otiCurrentOSTransponderInfo => otiCurrentOSTransponderInfo.olosOSListOSService).ToList() ?? [];
+
+                    lCurrentLogger.Info($"SCAN    Transponders: {osiCurrentOSScanIP.olotiOSListOSTransponderInfoDone?.Count ?? 0}    Services: {losCurrentServices.Count}".Pastel(ConsoleColor.Cyan));
+
+                    if (oLocalOptions.cloEventInformationTable)
                     {
-                        osiCurrentOSScanIP.Init(oLocalOptions.cloServerIP);
-
-                        foreach (var iCurrentFrequency in ParseFrequencies(oLocalOptions.cloFrequenciesInMHz!))
-                            osiCurrentOSScanIP.AddTransponderInfo(CreateTransponderInfo(oLocalOptions, iCurrentFrequency));
-
-                        osiCurrentOSScanIP.Scan(iLocalScanRetries: oLocalOptions.cloScanRetries, iLocalTunerLockGraceTime: oLocalOptions.cloTunerLockGraceTime, iLocalServerPort: oLocalOptions.cloServerPort);
-                        bDone = true;
-
-                        if (oLocalOptions.cloExportServices)
-                            osiCurrentOSScanIP.ExportServicesToJson();
-
-                        if (oLocalOptions.cloExportServicesExcel)
-                            osiCurrentOSScanIP.ExportServicesToExcel();
-
-                        if (oLocalOptions is { cloEventInformationTable: true, cloExportEvents: true })
-                            osiCurrentOSScanIP.ExportEventsToJson();
-
-                        if (oLocalOptions is { cloEventInformationTable: true, cloExportEventsExcel: true })
-                            osiCurrentOSScanIP.ExportEventsToExcel();
-
-                        // Counted from the scan result - matches the sum of "SERVICES FOUND" of all transponders
-                        var losCurrentServices = osiCurrentOSScanIP.olotiOSListOSTransponderInfoDone?.OfType<OSTransponderInfo>().SelectMany(otiCurrentOSTransponderInfo => otiCurrentOSTransponderInfo.olosOSListOSService).ToList() ?? [];
-
-                        lCurrentLogger.Info($"SCAN    Transponders: {osiCurrentOSScanIP.olotiOSListOSTransponderInfoDone?.Count ?? 0}    Services: {losCurrentServices.Count}".Pastel(ConsoleColor.Cyan));
-
-                        if (oLocalOptions.cloEventInformationTable)
-                        {
-                            lCurrentLogger.Info($"EIT     Services: {losCurrentServices.Count(osCurrentOSService => osCurrentOSService.oloeOSListOSEvent.Count > 0)}    Events: {losCurrentServices.Sum(osCurrentOSService => osCurrentOSService.oloeOSListOSEvent.Count)}".Pastel(ConsoleColor.Cyan));
-                            lCurrentLogger.Info($"EIT     Received sections: {iEITSections}    Total size: {iEITSize}    Short size: {iEITShortSize}    Events dropped by version change: {iEITEventsDeleted}".Pastel(ConsoleColor.Cyan));
-                        }
+                        lCurrentLogger.Info($"EIT     Services: {losCurrentServices.Count(osCurrentOSService => osCurrentOSService.oloeOSListOSEvent.Count > 0)}    Events: {losCurrentServices.Sum(osCurrentOSService => osCurrentOSService.oloeOSListOSEvent.Count)}".Pastel(ConsoleColor.Cyan));
+                        lCurrentLogger.Info($"EIT     Received sections: {iEITSections}    Total size: {iEITSize}    Short size: {iEITShortSize}    Events dropped by version change: {iEITEventsDeleted}".Pastel(ConsoleColor.Cyan));
                     }
 
                     break;
@@ -331,78 +325,6 @@ namespace KON.OctoScan.NET
                 lCurrentLogger.Error($"Error: {strCurrentError}".Pastel(ConsoleColor.Red));
 
             return lsCurrentErrors.Count == 0;
-        }
-
-        /// <summary>
-        /// Parses a comma separated list of frequencies and ranges (start-end:step), i.e. "138,346-858:8"
-        /// </summary>
-        /// <param name="strLocalFrequencies"></param>
-        /// <returns></returns>
-        private static List<int> ParseFrequencies(string strLocalFrequencies)
-        {
-            var liCurrentFrequencies = new List<int>();
-
-            foreach (var strCurrentFrequency in strLocalFrequencies.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                var saCurrentRange = strCurrentFrequency.Split(['-', ':']);
-
-                if (saCurrentRange.Length == 1 && int.TryParse(saCurrentRange[0], out var iCurrentFrequency))
-                {
-                    liCurrentFrequencies.Add(iCurrentFrequency);
-                }
-                else if (saCurrentRange.Length == 3 && int.TryParse(saCurrentRange[0], out var iRangeStart) && int.TryParse(saCurrentRange[1], out var iRangeEnd) && int.TryParse(saCurrentRange[2], out var iRangeStep) && iRangeStep > 0 && iRangeEnd >= iRangeStart)
-                {
-                    if ((iRangeEnd - iRangeStart) % iRangeStep != 0)
-                        lCurrentLogger.Warn($"-» Frequency range {strCurrentFrequency} does not end on a step - last frequency is {iRangeEnd - (iRangeEnd - iRangeStart) % iRangeStep}".Pastel(ConsoleColor.Yellow));
-
-                    for (var iCurrentRangeFrequency = iRangeStart; iCurrentRangeFrequency <= iRangeEnd; iCurrentRangeFrequency += iRangeStep)
-                        liCurrentFrequencies.Add(iCurrentRangeFrequency);
-                }
-                else
-                {
-                    lCurrentLogger.Warn($"-» Invalid frequency or frequency range {strCurrentFrequency} skipped".Pastel(ConsoleColor.Yellow));
-                }
-            }
-
-            return liCurrentFrequencies;
-        }
-
-        private static OSTransponderInfo CreateTransponderInfo(Options oLocalOptions, int iLocalFrequency)
-        {
-            var otiCurrentOSTransponderInfo = new OSTransponderInfo
-            {
-                iFrequency = iLocalFrequency,
-                iModulationSystem = Array.IndexOf(ModulationSystem2String, oLocalOptions.cloModulationSystem.ToString()),
-                iSymbolRate = oLocalOptions.cloSymbolRateInkSymbols ?? 0,
-                iSource = oLocalOptions.cloSatelliteSource ?? 0,
-                bUseNetworkInformationTable = oLocalOptions.cloNetworkInformationTable,
-                bScanEventInformationTable = oLocalOptions.cloEventInformationTable,
-                iInputStreamID = oLocalOptions.cloPhysicalLayerPipes is >= 0 and <= 255 ? oLocalOptions.cloPhysicalLayerPipes.Value : 0
-            };
-
-            if (oLocalOptions.cloModulationType != null)
-                otiCurrentOSTransponderInfo.iModulationType = Math.Max(Array.IndexOf(ModulationType2String, oLocalOptions.cloModulationType.ToString()?[1..]), 0);
-
-            if (!string.IsNullOrEmpty(oLocalOptions.cloPolarisation))
-                otiCurrentOSTransponderInfo.iPolarisation = Array.IndexOf(Polarisation2String, oLocalOptions.cloPolarisation);
-
-            if (!string.IsNullOrEmpty(oLocalOptions.cloBandwidth))
-                otiCurrentOSTransponderInfo.iBandwidth = Array.IndexOf(Bandwidth2String, oLocalOptions.cloBandwidth);
-
-            if (!string.IsNullOrEmpty(oLocalOptions.cloEventInformationTableSIDFilter))
-            {
-                var iCurrentServiceIDCounter = 0;
-
-                foreach (var strCurrentServiceID in oLocalOptions.cloEventInformationTableSIDFilter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(MAX_EIT_SID))
-                {
-                    if (int.TryParse(strCurrentServiceID, out var iCurrentServiceID))
-                        otiCurrentOSTransponderInfo.iaEventInformationTableServiceID[iCurrentServiceIDCounter++] = iCurrentServiceID;
-                    else
-                        lCurrentLogger.Warn($"-» Invalid service id {strCurrentServiceID} in --eitfiltersid skipped".Pastel(ConsoleColor.Yellow));
-                }
-            }
-
-            return otiCurrentOSTransponderInfo;
         }
     }
 }

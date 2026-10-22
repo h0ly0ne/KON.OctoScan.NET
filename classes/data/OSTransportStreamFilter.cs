@@ -12,6 +12,7 @@ public class OSTransportStreamFilter
     public int iUseTableExtension;
     public bool bIsVersionNumberSet;
     public uint[] laToDo = new uint[8];
-    public long lTimestamp; 
+    public long lTimestamp;
     public long lTimeout;
+    public bool bTimedOut;
 }

@@ -6,6 +6,7 @@ namespace KON.OctoScan.NET;
 public class OSTransponderInfo
 {
     public OSList<OSService> olosOSListOSService = [];
+    public List<(int iPacketID, int iServiceID)> ltiiMissingProgramMapTables = [];
 
     public int iType;
     public bool bUseNetworkInformationTable;

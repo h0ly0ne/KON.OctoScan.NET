@@ -14,7 +14,8 @@ public class OSPacketIdentifierInfo : IDisposable
     public int iBufferPointer;
     public int iBufferLength;
     public byte[]? byaBuffer;
-    public bool bHasContinuityErrors;
+    public int iPacketsReceived;
+    public bool bRequested;
 
     /// <summary>
     /// OSPacketIdentifierInfo.Init()
@@ -28,7 +29,8 @@ public class OSPacketIdentifierInfo : IDisposable
         olotsfOSListOSTransportStreamFilter = [];
         iPacketID = iLocalPID;
         otsiOSTransportStreamInfo = tsiLocalTSInfo;
-        bHasContinuityErrors = false;
+        iPacketsReceived = 0;
+        bRequested = false;
     }
 
     /// <summary>

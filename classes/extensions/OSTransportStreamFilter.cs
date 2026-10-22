@@ -38,13 +38,13 @@ public static class OSTransportStreamFilter_Extension
                 var iPacketIdentifier = byaCurrentBuffer.ToPIDAsInteger(i + 2);
 
                 if (iProgramNumber != 0)
-                    ostCurrentOSScanTransponder?.AddSFilter(iPacketIdentifier, DEFAULT_TID_PM, iProgramNumber, 2, 5);
+                    ostCurrentOSScanTransponder?.AddSFilter(iPacketIdentifier, DEFAULT_TID_PM, iProgramNumber, 2, FILTER_TIMEOUT_PMT);
                 else
                     iNetworkInformationTablePacketIdentifier = iPacketIdentifier;
             }
 
             if (ostCurrentOSScanTransponder?.otiOSTransponderInfo is { bUseNetworkInformationTable: true })
-                ostCurrentOSScanTransponder.AddSFilter(iNetworkInformationTablePacketIdentifier, DEFAULT_TID_NI_CURRENT, 0, 1, 15);
+                ostCurrentOSScanTransponder.AddSFilter(iNetworkInformationTablePacketIdentifier, DEFAULT_TID_NI_CURRENT, 0, 1, FILTER_TIMEOUT_NIT);
 
             return true;
         }
@@ -96,6 +96,8 @@ public static class OSTransportStreamFilter_Extension
             osCurrentOSService.liAudioPacketIdentifiers = [];
             osCurrentOSService.lbAudioPacketIdentifiersStreamType = [];
             osCurrentOSService.lsAudioPacketIdentifiersLanguage = [];
+            osCurrentOSService.liOtherPacketIdentifiers = [];
+            osCurrentOSService.lbOtherPacketIdentifiersStreamType = [];
 
             var iSectionEnd = opiiCurrentOSPacketIdentifierInfo.iBufferLength - 4;
             var iProgramInfoLength = byaCurrentBuffer.ToDVBLengthAsInteger(10);
@@ -151,6 +153,9 @@ public static class OSTransportStreamFilter_Extension
                         case ElementaryStreamDescriptors.AAC_descriptor:
                             bIsAudio |= iESDescriptorLength != 0;
                             break;
+                        case ElementaryStreamDescriptors.extension_descriptor when iESDescriptorLength >= 1 && EXTENSION_DESCRIPTOR_AUDIO_TAGS.Contains(byaCurrentBuffer[iCurrentESDescriptorPosition + 2]):
+                            bIsAudio = true;
+                            break;
                         case ElementaryStreamDescriptors.ISO_639_language_descriptor when iESDescriptorLength >= 3:
                             strLanguage ??= GetISO639LanguageCode(Encoding.ASCII.GetString(byaCurrentBuffer, iCurrentESDescriptorPosition + 2, 3));
 
@@ -175,6 +180,11 @@ public static class OSTransportStreamFilter_Extension
                     osCurrentOSService.liAudioPacketIdentifiers.Add(iElementaryPID);
                     osCurrentOSService.lbAudioPacketIdentifiersStreamType.Add(byStreamType);
                     osCurrentOSService.lsAudioPacketIdentifiersLanguage.Add(strLanguage ?? "und");
+                }
+                else
+                {
+                    osCurrentOSService.liOtherPacketIdentifiers.Add(iElementaryPID);
+                    osCurrentOSService.lbOtherPacketIdentifiersStreamType.Add(byStreamType);
                 }
 
                 iCurrentStreamPosition += 5 + iESInfoLength;
@@ -291,6 +301,9 @@ public static class OSTransportStreamFilter_Extension
                 return false;
 
             var iCurrentTransportStreamID = byaCurrentBuffer.ToUShortAsInteger(3);
+
+            if (opiiCurrentOSPacketIdentifierInfo.otsiOSTransportStreamInfo != null)
+                opiiCurrentOSPacketIdentifierInfo.otsiOSTransportStreamInfo.iServiceDescriptionTransportStreamID = iCurrentTransportStreamID;
             var iCurrentOriginalNetworkID = byaCurrentBuffer.ToUShortAsInteger(8);
             var iSectionEnd = opiiCurrentOSPacketIdentifierInfo.iBufferLength - 4;
 
@@ -315,12 +328,8 @@ public static class OSTransportStreamFilter_Extension
                 osCurrentOSService.iRunningStatus = (byStatusFlagsByte & 0xE0) >> 5;
 
                 if (otiCurrentOSTransponderInfo is { bScanEventInformationTable: true } && osCurrentOSService.iEventInformationTableSchedule != 0)
-                {
                     if (otiCurrentOSTransponderInfo.iaEventInformationTableServiceID[0] == 0 || otiCurrentOSTransponderInfo.iaEventInformationTableServiceID.Contains(iCurrentServiceID))
-                    {
-                        ostCurrentOSScanTransponder?.AddSFilter(DEFAULT_PID_EIT, DEFAULT_TID_EI, iCurrentServiceID, 2, 15);
-                    }
-                }
+                        ostCurrentOSScanTransponder?.AddSFilter(DEFAULT_PID_EIT, DEFAULT_TID_EI, iCurrentServiceID, 2, FILTER_TIMEOUT_EIT);
 
                 for (var iCurrentDescriptorPosition = iCurrentServicePosition + 5; iCurrentDescriptorPosition + 2 <= iCurrentDescriptorsEnd; iCurrentDescriptorPosition += 2 + byaCurrentBuffer[iCurrentDescriptorPosition + 1])
                 {

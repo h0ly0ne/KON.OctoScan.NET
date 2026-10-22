@@ -30,9 +30,10 @@ public static class OSScanIP_Extension
         ("lbAudioPacketIdentifiersStreamType", typeof(string), (_, osCurrentOSService) => string.Join(",", osCurrentOSService.lbAudioPacketIdentifiersStreamType.Select(byCurrentStreamType => byCurrentStreamType.ToString("X2")))),
         ("lsAudioPacketIdentifiersLanguage", typeof(string), (_, osCurrentOSService) => string.Join(",", osCurrentOSService.lsAudioPacketIdentifiersLanguage)),
         ("iSubtitlePacketIdentifier", typeof(int), (_, osCurrentOSService) => osCurrentOSService.iSubtitlePacketIdentifier),
-        ("iTeletextPacketIdentifier", typeof(int), (_, osCurrentOSService) => osCurrentOSService.iTeletextPacketIdentifier)
+        ("iTeletextPacketIdentifier", typeof(int), (_, osCurrentOSService) => osCurrentOSService.iTeletextPacketIdentifier),
+        ("liOtherPacketIdentifiers", typeof(string), (_, osCurrentOSService) => string.Join(",", osCurrentOSService.liOtherPacketIdentifiers)),
+        ("lbOtherPacketIdentifiersStreamType", typeof(string), (_, osCurrentOSService) => string.Join(",", osCurrentOSService.lbOtherPacketIdentifiersStreamType.Select(byCurrentStreamType => byCurrentStreamType.ToString("X2"))))
     ];
-
     private static readonly (string strName, Type tType, Func<OSService, OSEvent, object> fValue)[] taEventColumns =
     [
         ("iOriginalNetworkID", typeof(int), (_, oeCurrentOSEvent) => oeCurrentOSEvent.iOriginalNetworkID),
@@ -115,9 +116,9 @@ public static class OSScanIP_Extension
                     }, out var iCurrentRetries);
 
                     osiLocalOSScanIP.lRetries = iCurrentRetries;
+                    otiCurrentOSTransponderInfo.ltiiMissingProgramMapTables = ostCurrentOSScanTransponder.bFailed || ostCurrentOSScanTransponder.bNoSignal ? [] : otsiCurrentOSTransportStreamInfo.lotsfTimedOutProgramMapTables.Where(otsfCurrentOSTransportStreamFilter => otsfCurrentOSTransportStreamFilter.opiiOSPacketIdentifierInfo != null).Select(otsfCurrentOSTransportStreamFilter => (otsfCurrentOSTransportStreamFilter.opiiOSPacketIdentifierInfo!.iPacketID, otsfCurrentOSTransportStreamFilter.iTableExtension)).Distinct().ToList();
                     var lEndTime = CurrentTimestamp();
                     otsiCurrentOSTransportStreamInfo.Dispose();
-                    
                     osiLocalOSScanIP.olotiOSListOSTransponderInfo.Remove(otiCurrentOSTransponderInfo);
                     osiLocalOSScanIP.olotiOSListOSTransponderInfoDone?.AddLast(otiCurrentOSTransponderInfo);
 
@@ -132,6 +133,8 @@ public static class OSScanIP_Extension
 
                     lCurrentLogger.Info($"OPERATION(S) {strCurrentResult} (AND TOOK {lEndTime - lStartTime} SECOND(S) - RETRIES: {osiLocalOSScanIP.lRetries})".Pastel(ccCurrentResultColor));
                 }
+
+                osiLocalOSScanIP.ScanMissingProgramMapTables(iLocalScanRetries, iLocalTunerLockGraceTime);
             }
             finally
             {
@@ -139,6 +142,62 @@ public static class OSScanIP_Extension
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// OSScanIP.ScanMissingProgramMapTables()
+        /// </summary>
+        /// <param name="iLocalScanRetries"></param>
+        /// <param name="iLocalTunerLockGraceTime"></param>
+        public void ScanMissingProgramMapTables(int? iLocalScanRetries, int? iLocalTunerLockGraceTime)
+        {
+            LogTrace("OSScanIP.ScanMissingProgramMapTables()");
+
+            var ostCurrentOSScanTransponder = osiLocalOSScanIP.ostOSScanTransponder;
+            var otsiCurrentOSTransportStreamInfo = ostCurrentOSScanTransponder?.otsiOSTransportStreamInfo;
+            var osicCurrentOSSatIPConnection = ostCurrentOSScanTransponder?.osicOSSatIPConnection;
+
+            if (ostCurrentOSScanTransponder == null || otsiCurrentOSTransportStreamInfo == null || osicCurrentOSSatIPConnection == null)
+                return;
+
+            foreach (var otiCurrentOSTransponderInfo in osiLocalOSScanIP.olotiOSListOSTransponderInfoDone?.OfType<OSTransponderInfo>().Where(otiCurrentOSTransponderInfo => otiCurrentOSTransponderInfo.ltiiMissingProgramMapTables.Count > 0).ToList() ?? [])
+            {
+                if (bDone)
+                    break;
+
+                var ltiiCurrentMissing = otiCurrentOSTransponderInfo.ltiiMissingProgramMapTables;
+                osicCurrentOSSatIPConnection.strTune = otiCurrentOSTransponderInfo.ToString();
+                ostCurrentOSScanTransponder.otiOSTransponderInfo = otiCurrentOSTransponderInfo;
+                lCurrentLogger.Info($"TUNE {osicCurrentOSSatIPConnection.strTune} (WAITING FOR {ltiiCurrentMissing.Count} PMT(S))".Pastel(ConsoleColor.Magenta));
+                var lStartTime = CurrentTimestamp();
+
+                Retry(iLocalScanRetries ?? 3, delegate
+                {
+                    otsiCurrentOSTransportStreamInfo.Init();
+
+                    if (!ostCurrentOSScanTransponder.Scan(iLocalTunerLockGraceTime ?? TUNER_LOCK_GRACE_TIME, ltiiCurrentMissing))
+                        ostCurrentOSScanTransponder.bFailed = true;
+
+                    return !ostCurrentOSScanTransponder.bFailed || ostCurrentOSScanTransponder.bPermanentError;
+                }, out var iCurrentRetries);
+
+                var hsiCurrentStillMissing = otsiCurrentOSTransportStreamInfo.lotsfTimedOutProgramMapTables.Select(otsfCurrentOSTransportStreamFilter => otsfCurrentOSTransportStreamFilter.iTableExtension).ToHashSet();
+                var ltiiCurrentStillMissing = ostCurrentOSScanTransponder.bFailed || ostCurrentOSScanTransponder.bNoSignal ? ltiiCurrentMissing : ltiiCurrentMissing.Where(tCurrentEntry => hsiCurrentStillMissing.Contains(tCurrentEntry.iServiceID)).ToList();
+                var liCurrentReceived = ltiiCurrentMissing.Except(ltiiCurrentStillMissing).Select(tCurrentEntry => tCurrentEntry.iServiceID).ToList();
+
+                if (ltiiCurrentStillMissing.Count > 0)
+                    LogTrace($"Warning: {ltiiCurrentStillMissing.Count} PMT(s) without data within {FILTER_TIMEOUT_PMT_SECOND_PASS} s - {string.Join(", ", ltiiCurrentStillMissing.Select(tCurrentEntry => $"SID {tCurrentEntry.iServiceID} (PID 0x{tCurrentEntry.iPacketID:X4})"))}");
+
+                if (liCurrentReceived.Count > 0 && oCurrentOptions?.cloPrintServices == true)
+                    otiCurrentOSTransponderInfo.PrintServices(liCurrentReceived);
+
+                otiCurrentOSTransponderInfo.ltiiMissingProgramMapTables = ltiiCurrentStillMissing;
+                otsiCurrentOSTransportStreamInfo.Dispose();
+                var strCurrentResult = ostCurrentOSScanTransponder.bFailed ? $"FAILED{(ostCurrentOSScanTransponder.strFailReason != null ? $" ({ostCurrentOSScanTransponder.strFailReason})" : string.Empty)}" : $"{liCurrentReceived.Count} OF {ltiiCurrentMissing.Count} PMT(S) RECEIVED";
+                var ccCurrentResultColor = ostCurrentOSScanTransponder.bFailed ? ConsoleColor.Red : ltiiCurrentStillMissing.Count > 0 ? ConsoleColor.Yellow : ConsoleColor.Green;
+
+                lCurrentLogger.Info($"OPERATION(S) {strCurrentResult} (AND TOOK {CurrentTimestamp() - lStartTime} SECOND(S) - RETRIES: {iCurrentRetries})".Pastel(ccCurrentResultColor));
+            }
         }
 
         /// <summary>
@@ -179,10 +238,8 @@ public static class OSScanIP_Extension
                 dtCurrentDataTable.Columns.Add(tCurrentColumn.strName, tCurrentColumn.tType);
 
             foreach (var osCurrentOSService in osiLocalOSScanIP.olotiOSListOSTransponderInfoDone?.OfType<OSTransponderInfo>().SelectMany(otiCurrentOSTransponderInfo => otiCurrentOSTransponderInfo.olosOSListOSService) ?? [])
-            {
                 foreach (var oeCurrentOSEvent in osCurrentOSService.oloeOSListOSEvent)
-                    dtCurrentDataTable.Rows.Add(taEventColumns.Select(tCurrentColumn => tCurrentColumn.fValue(osCurrentOSService, oeCurrentOSEvent)).ToArray());
-            }
+                    dtCurrentDataTable.Rows.Add([.. taEventColumns.Select(tCurrentColumn => tCurrentColumn.fValue(osCurrentOSService, oeCurrentOSEvent))]);
 
             return dtCurrentDataTable;
         }
@@ -251,7 +308,6 @@ public static class OSScanIP_Extension
 
         var strCurrentFilename = GetExportFilename(dtLocalDataTable.TableName, "json");
         var ldsoCurrentRows = dtLocalDataTable.Rows.Cast<DataRow>().Select(drCurrentRow => dtLocalDataTable.Columns.Cast<DataColumn>().ToDictionary(dcCurrentColumn => dcCurrentColumn.ColumnName, dcCurrentColumn => drCurrentRow[dcCurrentColumn])).ToList();
-
         File.WriteAllText(strCurrentFilename, JsonSerializer.Serialize(ldsoCurrentRows, new JsonSerializerOptions { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
         lCurrentLogger.Info($"EXPORT {strCurrentFilename} ({ldsoCurrentRows.Count} ROWS)".Pastel(ConsoleColor.Cyan));
     }

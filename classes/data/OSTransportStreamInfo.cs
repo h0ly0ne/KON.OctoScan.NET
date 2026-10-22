@@ -9,8 +9,12 @@ public class OSTransportStreamInfo : IDisposable
     public OSList<OSTransportStreamFilter>? olotsfOSListOSTransportStreamFilter;
     public OSScanTransponder? ostOSScanTransponder;
     public OSPacketIdentifierInfo[]? opiiOSPacketIdentifierInfo;
+    public List<OSTransportStreamFilter> lotsfTimedOutProgramMapTables = [];
 
-    public int iTransportStreamID;
+    public int iTransportStreamID = -1;
+    public int iServiceDescriptionTransportStreamID = -1;
+    public int iStaleTransportStreamID = -1;
+    public long lStaleTransportStreamUntil;
     public bool bDone;
     public long lStreamClock;
     public uint uiLastRTPTimestamp;
@@ -19,6 +23,11 @@ public class OSTransportStreamInfo : IDisposable
     public long lRTPClockStall;
     public int iRTPClockDiscontinuities;
     public long lIdleCredit;
+    public long lFirstDataWallTime;
+    public long lFirstDataStreamClock;
+    public bool bPIDsChanged;
+    public long lLastPIDUpdate;
+    public int iPIDRefreshes;
 
     /// <summary>
     /// OSTransportStreamInfo.Init()
@@ -28,6 +37,10 @@ public class OSTransportStreamInfo : IDisposable
         LogTrace("OSTransportStreamInfo.Init()");
 
         bDone = false;
+        iTransportStreamID = -1;
+        iServiceDescriptionTransportStreamID = -1;
+        iStaleTransportStreamID = -1;
+        lStaleTransportStreamUntil = 0;
         lStreamClock = 0;
         uiLastRTPTimestamp = 0;
         bRTPTimestampValid = false;
@@ -35,6 +48,12 @@ public class OSTransportStreamInfo : IDisposable
         lRTPClockStall = 0;
         iRTPClockDiscontinuities = 0;
         lIdleCredit = 0;
+        lFirstDataWallTime = 0;
+        lFirstDataStreamClock = 0;
+        bPIDsChanged = false;
+        lLastPIDUpdate = 0;
+        iPIDRefreshes = 0;
+        lotsfTimedOutProgramMapTables = [];
         olopiiOSListOSPacketIdentifierInfo = [];
         olotsfOSListOSTransportStreamFilter = [];
         opiiOSPacketIdentifierInfo = new OSPacketIdentifierInfo[TS_PID_COUNT];

@@ -31,11 +31,12 @@ public static class OSTransponderInfo_Extension
         /// <summary>
         /// OSTransponderInfo.PrintServices()
         /// </summary>
-        public void PrintServices()
+        /// <param name="lLocalServiceIDs">Only these services (null for all)</param>
+        public void PrintServices(IReadOnlyCollection<int>? lLocalServiceIDs = null)
         {
             LogTrace("OSTransponderInfo.PrintServices()");
 
-            foreach (var osCurrentOSService in otiLocalOSTransponderInfo.olosOSListOSService)
+            foreach (var osCurrentOSService in otiLocalOSTransponderInfo.olosOSListOSService.Where(osCurrentOSService => lLocalServiceIDs == null || lLocalServiceIDs.Contains(osCurrentOSService.iServiceID)))
             {
                 lCurrentLogger.Info("SERVICE".Pastel(ConsoleColor.Green));
                 lCurrentLogger.Info($" PROVIDERNAME:  {osCurrentOSService.strProviderName}".Pastel(ConsoleColor.Green));
@@ -48,7 +49,7 @@ public static class OSTransponderInfo_Extension
 
                 if (osCurrentOSService.bGotFromProgramMapTable)
                 {
-                    List<int> liCurrentPIDs = [osCurrentOSService.iProgramMapTable, osCurrentOSService.iVideoPacketIdentifier, ..osCurrentOSService.liAudioPacketIdentifiers, osCurrentOSService.iSubtitlePacketIdentifier, osCurrentOSService.iTeletextPacketIdentifier];
+                    List<int> liCurrentPIDs = [osCurrentOSService.iProgramMapTable, osCurrentOSService.iVideoPacketIdentifier, ..osCurrentOSService.liAudioPacketIdentifiers, osCurrentOSService.iSubtitlePacketIdentifier, osCurrentOSService.iTeletextPacketIdentifier, ..osCurrentOSService.liOtherPacketIdentifiers];
                     liCurrentPIDs.RemoveAll(iCurrentPID => iCurrentPID == 0);
 
                     if (osCurrentOSService.iProgramClockReferencePacketIdentifier != 0 && !liCurrentPIDs.Contains(osCurrentOSService.iProgramClockReferencePacketIdentifier))
@@ -57,6 +58,9 @@ public static class OSTransponderInfo_Extension
                     lCurrentLogger.Info($" PIDS:          {string.Join(",", liCurrentPIDs)}".Pastel(ConsoleColor.Green));
                     lCurrentLogger.Info($" VPID:          {osCurrentOSService.iVideoPacketIdentifier}".Pastel(ConsoleColor.Green));
                     lCurrentLogger.Info($" APIDS:         {string.Join(",", osCurrentOSService.liAudioPacketIdentifiers)}".Pastel(ConsoleColor.Green));
+
+                    if (osCurrentOSService.liOtherPacketIdentifiers.Count > 0)
+                        lCurrentLogger.Info($" OPIDS:         {string.Join(",", osCurrentOSService.liOtherPacketIdentifiers.Select((iCurrentPID, iCurrentIndex) => $"{iCurrentPID} (0x{osCurrentOSService.lbOtherPacketIdentifiersStreamType[iCurrentIndex]:X2})"))}".Pastel(ConsoleColor.Green));
 
                     if (osCurrentOSService.iVideoPacketIdentifier == 0)
                         lCurrentLogger.Info(" RADIO:         1".Pastel(ConsoleColor.Green));

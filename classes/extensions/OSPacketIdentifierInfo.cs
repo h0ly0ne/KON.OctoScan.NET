@@ -21,8 +21,8 @@ public static class OSPacketIdentifierInfo_Extension
             if (!HasTransportStreamPayload(rosLocalPacket))
                 return true;
 
-            var byCurrentContinuityCounter = rosLocalPacket[3].GetLSB();
-            var bIsValid = ((byte)(opiiLocalOSPacketIdentifierInfo.byContinuityCounter + 1)).GetLSB() == byCurrentContinuityCounter || opiiLocalOSPacketIdentifierInfo.byContinuityCounter == byte.MaxValue;
+            var byCurrentContinuityCounter = (byte)(rosLocalPacket[3] & 0x0F);
+            var bIsValid = ((opiiLocalOSPacketIdentifierInfo.byContinuityCounter + 1) & 0x0F) == byCurrentContinuityCounter || opiiLocalOSPacketIdentifierInfo.byContinuityCounter == byte.MaxValue;
 
             if (bIsValid)
                 opiiLocalOSPacketIdentifierInfo.byContinuityCounter = byCurrentContinuityCounter;
@@ -30,6 +30,17 @@ public static class OSPacketIdentifierInfo_Extension
                 opiiLocalOSPacketIdentifierInfo.Reset();
 
             return bIsValid;
+        }
+
+        /// <summary>
+        /// OSPacketIdentifierInfo.HasOpenFilters()
+        /// </summary>
+        /// <returns>bool</returns>
+        public bool HasOpenFilters()
+        {
+            LogTrace("OSPacketIdentifierInfo.HasOpenFilters()");
+
+            return opiiLocalOSPacketIdentifierInfo.olotsfOSListOSTransportStreamFilter?.Any(otsfCurrentOSTransportStreamFilter => otsfCurrentOSTransportStreamFilter is { bDone: false, bTimedOut: false }) == true;
         }
 
         /// <summary>

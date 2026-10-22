@@ -14,7 +14,7 @@ public static class Extensions
     /// <returns>string</returns>
     public static string CleanupInvalidData(this string strLocalString)
     {
-        LogTrace("Global.CleanupInvalidData()");
+        LogTrace("Extensions.CleanupInvalidData()");
 
         var sbCurrentStringBuilder = new StringBuilder(strLocalString.Length);
 
@@ -30,18 +30,6 @@ public static class Extensions
     }
 
     /// <summary>
-    /// Extensions.GetLSB()
-    /// </summary>
-    /// <param name="byLocalByteValue"></param>
-    /// <returns>byte</returns>
-    public static byte GetLSB(this byte byLocalByteValue)
-    {
-        LogTrace("Global.GetLSB()");
-
-        return (byte)(byLocalByteValue & 0x0F);
-    }
-
-    /// <summary>
     /// Extensions.SendData()
     /// </summary>
     /// <param name="nsLocalSocket"></param>
@@ -49,7 +37,7 @@ public static class Extensions
     /// <returns>bool</returns>
     public static bool SendData(this Socket? nsLocalSocket, string strLocalMessage)
     {
-        LogTrace("Global.SendData()");
+        LogTrace("Extensions.SendData()");
 
         if (nsLocalSocket == null)
             return false;
@@ -77,7 +65,7 @@ public static class Extensions
     /// <returns>int</returns>
     public static int ToUShortAsInteger(this byte[]? byaLocalBuffer, int iLocalStartIndex)
     {
-        LogTrace("Global.ToUShortAsInteger()");
+        LogTrace("Extensions.ToUShortAsInteger()");
 
         if (byaLocalBuffer == null || iLocalStartIndex + 1 >= byaLocalBuffer.Length)
             return 0;
@@ -86,14 +74,14 @@ public static class Extensions
     }
 
     /// <summary>
-    /// Extensions.ToDVBLengthAsInteger() - 12 bit length field
+    /// Extensions.ToDVBLengthAsInteger()
     /// </summary>
     /// <param name="byaLocalBuffer"></param>
     /// <param name="iLocalStartIndex"></param>
     /// <returns>int</returns>
     public static int ToDVBLengthAsInteger(this byte[]? byaLocalBuffer, int iLocalStartIndex)
     {
-        LogTrace("Global.ToDVBLengthAsInteger()");
+        LogTrace("Extensions.ToDVBLengthAsInteger()");
 
         if (byaLocalBuffer == null || iLocalStartIndex + 1 >= byaLocalBuffer.Length)
             return 0;
@@ -102,14 +90,14 @@ public static class Extensions
     }
 
     /// <summary>
-    /// Extensions.ToPIDAsInteger() - 13 bit packet identifier field
+    /// Extensions.ToPIDAsInteger()
     /// </summary>
     /// <param name="byaLocalBuffer"></param>
     /// <param name="iLocalStartIndex"></param>
     /// <returns>int</returns>
     public static int ToPIDAsInteger(this byte[]? byaLocalBuffer, int iLocalStartIndex)
     {
-        LogTrace("Global.ToPIDAsInteger()");
+        LogTrace("Extensions.ToPIDAsInteger()");
 
         if (byaLocalBuffer == null || iLocalStartIndex + 1 >= byaLocalBuffer.Length)
             return 0;
@@ -126,7 +114,7 @@ public static class Extensions
     /// <returns>int</returns>
     public static int ToBCDAsInteger(this byte[]? byaLocalBuffer, int iLocalStartIndex, int iLocalLength)
     {
-        LogTrace("Global.ToBCDAsInteger()");
+        LogTrace("Extensions.ToBCDAsInteger()");
 
         if (byaLocalBuffer == null || iLocalStartIndex + (iLocalLength + 1) / 2 > byaLocalBuffer.Length)
             return 0;

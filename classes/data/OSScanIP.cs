@@ -9,8 +9,6 @@ public class OSScanIP : IDisposable
     public OSScanTransponder? ostOSScanTransponder;
 
     public string? strHost;
-    public bool bDone;
-    public long lRetries;
 
     /// <summary>
     /// OSScanIP.Init()
@@ -23,9 +21,7 @@ public class OSScanIP : IDisposable
         olotiOSListOSTransponderInfo = [];
         olotiOSListOSTransponderInfoDone = [];
         ostOSScanTransponder = new OSScanTransponder();
-        bDone = false;
         strHost = strLocalHost;
-        lRetries = 0;
     }
 
     /// <summary>
@@ -38,8 +34,6 @@ public class OSScanIP : IDisposable
         olotiOSListOSTransponderInfo?.Clear();
         olotiOSListOSTransponderInfoDone?.Clear();
         ostOSScanTransponder = null;
-        bDone = false;
         strHost = null;
-        lRetries = 0;
     }
 }

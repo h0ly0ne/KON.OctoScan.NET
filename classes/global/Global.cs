@@ -463,9 +463,7 @@ public static class Global
             var saCurrentRange = strCurrentFrequency.Split('-', ':');
 
             if (saCurrentRange.Length == 1 && int.TryParse(saCurrentRange[0], out var iCurrentFrequency))
-            {
                 liCurrentFrequencies.Add(iCurrentFrequency);
-            }
             else if (saCurrentRange.Length == 3 && int.TryParse(saCurrentRange[0], out var iRangeStart) && int.TryParse(saCurrentRange[1], out var iRangeEnd) && int.TryParse(saCurrentRange[2], out var iRangeStep) && iRangeStep > 0 && iRangeEnd >= iRangeStart)
             {
                 if ((iRangeEnd - iRangeStart) % iRangeStep != 0)

@@ -287,7 +287,7 @@ public static class OSScanTransponder_Extension
         /// OSScanTransponder.IsChannelConfirmed()
         /// </summary>
         /// <param name="lLocalChannelChangeTime"></param>
-        /// <returns></returns>
+        /// <returns>bool</returns>
         public bool IsChannelConfirmed(long lLocalChannelChangeTime)
         {
             LogTrace("OSScanTransponder.IsChannelConfirmed()");
@@ -688,43 +688,21 @@ public static class OSScanTransponder_Extension
         /// <summary>
         /// OSScanTransponder.UpdatePIDs()
         /// </summary>
-        /// <returns></returns>
+        /// <returns>bool</returns>
         public bool UpdatePIDs()
         {
             LogTrace("OSScanTransponder.UpdatePIDs()");
 
-            var opiiaCurrentOSPacketIdentifierInfo = ostLocalOSScanTransponder.otsiOSTransportStreamInfo?.opiiOSPacketIdentifierInfo;
-            var sbPIDs = new StringBuilder();
+            var lopiiCurrentRequestedPIDs = ostLocalOSScanTransponder.GetPIDsToRequest(out var strCurrentPIDs);
+            var bCurrentResult = ostLocalOSScanTransponder.RTSPSendPlay(strCurrentPIDs) && ostLocalOSScanTransponder.RTSPCheckOK();
 
-            if (opiiaCurrentOSPacketIdentifierInfo != null)
-            {
-                foreach (var opiiCurrentOSPacketIdentifierInfo in opiiaCurrentOSPacketIdentifierInfo)
-                {
-                    if (!opiiCurrentOSPacketIdentifierInfo.bUsed)
-                        continue;
-
-                    if (sbPIDs.Length >= 300)
-                        break;
-
-                    if (sbPIDs.Length > 0)
-                        sbPIDs.Append(',');
-
-                    sbPIDs.Append(opiiCurrentOSPacketIdentifierInfo.iPacketID);
-                }
-            }
-
-            if (sbPIDs.Length == 0)
-                sbPIDs.Append("none");
-
-            var bCurrentResult = ostLocalOSScanTransponder.RTSPSendPlay(sbPIDs.ToString()) && ostLocalOSScanTransponder.RTSPCheckOK();
-
-            if (ostLocalOSScanTransponder.otsiOSTransportStreamInfo == null) 
+            if (ostLocalOSScanTransponder.otsiOSTransportStreamInfo == null)
                 return bCurrentResult;
 
             ostLocalOSScanTransponder.otsiOSTransportStreamInfo.bPIDsChanged = !bCurrentResult;
 
             if (bCurrentResult)
-                ostLocalOSScanTransponder.MarkPIDsRequested();
+                ostLocalOSScanTransponder.MarkPIDsRequested(lopiiCurrentRequestedPIDs);
 
             ostLocalOSScanTransponder.otsiOSTransportStreamInfo.lLastPIDUpdate = Environment.TickCount64;
 
@@ -732,9 +710,44 @@ public static class OSScanTransponder_Extension
         }
 
         /// <summary>
+        /// OSScanTransponder.GetPIDsToRequest()
+        /// </summary>
+        /// <param name="strLocalPIDs"></param>
+        /// <returns>List(OSPacketIdentifierInfo)</returns>
+        public List<OSPacketIdentifierInfo> GetPIDsToRequest(out string strLocalPIDs)
+        {
+            LogTrace("OSScanTransponder.GetPIDsToRequest()");
+
+            var lopiiCurrentPIDs = new List<OSPacketIdentifierInfo>();
+            var sbCurrentPIDs = new StringBuilder();
+
+            foreach (var opiiCurrentOSPacketIdentifierInfo in ostLocalOSScanTransponder.otsiOSTransportStreamInfo?.olopiiOSListOSPacketIdentifierInfo ?? [])
+            {
+                if (!opiiCurrentOSPacketIdentifierInfo.HasOpenFilters())
+                    continue;
+
+                var strCurrentPID = opiiCurrentOSPacketIdentifierInfo.iPacketID.ToString(CultureInfo.InvariantCulture);
+
+                if (sbCurrentPIDs.Length + 1 + strCurrentPID.Length > MAX_PID_LIST_LENGTH)
+                    break;
+
+                if (sbCurrentPIDs.Length > 0)
+                    sbCurrentPIDs.Append(',');
+
+                sbCurrentPIDs.Append(strCurrentPID);
+                lopiiCurrentPIDs.Add(opiiCurrentOSPacketIdentifierInfo);
+            }
+
+            strLocalPIDs = sbCurrentPIDs.Length > 0 ? sbCurrentPIDs.ToString() : "none";
+
+            return lopiiCurrentPIDs;
+        }
+
+        /// <summary>
         /// OSScanTransponder.MarkPIDsRequested()
         /// </summary>
-        public void MarkPIDsRequested()
+        /// <param name="lopiiLocalRequestedPIDs"></param>
+        public void MarkPIDsRequested(List<OSPacketIdentifierInfo> lopiiLocalRequestedPIDs)
         {
             LogTrace("OSScanTransponder.MarkPIDsRequested()");
 
@@ -744,13 +757,17 @@ public static class OSScanTransponder_Extension
                 return;
 
             var lCurrentTimestamp = otsiCurrentOSTransportStreamInfo.GetStreamTime();
+            var hsopiiCurrentRequestedPIDs = lopiiLocalRequestedPIDs.ToHashSet();
 
-            foreach (var opiiCurrentOSPacketIdentifierInfo in otsiCurrentOSTransportStreamInfo.olopiiOSListOSPacketIdentifierInfo.Where(opiiCurrentOSPacketIdentifierInfo => !opiiCurrentOSPacketIdentifierInfo.bRequested))
+            foreach (var opiiCurrentOSPacketIdentifierInfo in otsiCurrentOSTransportStreamInfo.olopiiOSListOSPacketIdentifierInfo)
             {
-                opiiCurrentOSPacketIdentifierInfo.bRequested = true;
+                var bCurrentRequested = hsopiiCurrentRequestedPIDs.Contains(opiiCurrentOSPacketIdentifierInfo);
 
-                foreach (var otsfCurrentOSTransportStreamFilter in opiiCurrentOSPacketIdentifierInfo.olotsfOSListOSTransportStreamFilter ?? [])
-                    otsfCurrentOSTransportStreamFilter.lTimestamp = lCurrentTimestamp;
+                if (bCurrentRequested && !opiiCurrentOSPacketIdentifierInfo.bRequested)
+                    foreach (var otsfCurrentOSTransportStreamFilter in opiiCurrentOSPacketIdentifierInfo.olotsfOSListOSTransportStreamFilter ?? [])
+                        otsfCurrentOSTransportStreamFilter.lTimestamp = lCurrentTimestamp;
+
+                opiiCurrentOSPacketIdentifierInfo.bRequested = bCurrentRequested;
             }
         }
 
@@ -769,9 +786,12 @@ public static class OSScanTransponder_Extension
 
             var lCurrentTime = Environment.TickCount64;
 
+            if (lCurrentTime < otsiCurrentOSTransportStreamInfo.lLastPIDUpdate + PID_UPDATE_MIN_INTERVAL)
+                return true;
+
             if (otsiCurrentOSTransportStreamInfo is { bPIDsChanged: false, iPIDRefreshes: < MAX_PID_REFRESHES } && lCurrentTime >= otsiCurrentOSTransportStreamInfo.lLastPIDUpdate + PID_REFRESH_TIMEOUT)
             {
-                var lopiiCurrentWithoutData = otsiCurrentOSTransportStreamInfo.olopiiOSListOSPacketIdentifierInfo?.Where(opiiCurrentOSPacketIdentifierInfo => opiiCurrentOSPacketIdentifierInfo is { iPacketsReceived: 0, olotsfOSListOSTransportStreamFilter.Count: > 0 }).ToList() ?? [];
+                var lopiiCurrentWithoutData = otsiCurrentOSTransportStreamInfo.olopiiOSListOSPacketIdentifierInfo?.Where(opiiCurrentOSPacketIdentifierInfo => opiiCurrentOSPacketIdentifierInfo is { bRequested: true, iPacketsReceived: 0 } && opiiCurrentOSPacketIdentifierInfo.HasOpenFilters()).ToList() ?? [];
 
                 if (lopiiCurrentWithoutData.Count > 0)
                 {
@@ -781,7 +801,7 @@ public static class OSScanTransponder_Extension
                 }
             }
 
-            if (!otsiCurrentOSTransportStreamInfo.bPIDsChanged || lCurrentTime < otsiCurrentOSTransportStreamInfo.lLastPIDUpdate + PID_UPDATE_MIN_INTERVAL)
+            if (!otsiCurrentOSTransportStreamInfo.bPIDsChanged && ostLocalOSScanTransponder.GetPIDsToRequest(out _).TrueForAll(opiiCurrentOSPacketIdentifierInfo => opiiCurrentOSPacketIdentifierInfo.bRequested))
                 return true;
 
             return ostLocalOSScanTransponder.UpdatePIDs();
@@ -808,7 +828,6 @@ public static class OSScanTransponder_Extension
                 opiiCurrentOSPacketIdentifierInfo.bUsed = true;
                 otsiCurrentOSTransportStreamInfo.ostOSScanTransponder = ostLocalOSScanTransponder;
                 otsiCurrentOSTransportStreamInfo.olopiiOSListOSPacketIdentifierInfo?.AddLast(opiiCurrentOSPacketIdentifierInfo);
-                otsiCurrentOSTransportStreamInfo.bPIDsChanged = true;
             }
 
             opiiCurrentOSPacketIdentifierInfo.iUseTableExtension = iLocalUseTableExtension;
@@ -886,7 +905,7 @@ public static class OSScanTransponder_Extension
 
                 if (llnCurrentNode.Value.bDone)
                     olotsfCurrentOSListOSTransportStreamFilter.Remove(llnCurrentNode);
-                else if (lCurrentTimestamp >= llnCurrentNode.Value.lTimestamp + llnCurrentNode.Value.lTimeout)
+                else if (llnCurrentNode.Value.opiiOSPacketIdentifierInfo is { bRequested: true } && lCurrentTimestamp >= llnCurrentNode.Value.lTimestamp + llnCurrentNode.Value.lTimeout)
                 {
                     llnCurrentNode.Value.bTimedOut = true;
 
@@ -899,7 +918,7 @@ public static class OSScanTransponder_Extension
                 llnCurrentNode = llnNextNode;
             }
 
-            if (olotsfCurrentOSListOSTransportStreamFilter.IsEmpty())
+            if (olotsfCurrentOSListOSTransportStreamFilter.Count == 0)
                 otsiCurrentOSTransportStreamInfo.bDone = true;
         }
 
@@ -909,7 +928,8 @@ public static class OSScanTransponder_Extension
         /// <param name="rosLocalBuffer"></param>
         public void ProcessTransponders(ReadOnlySpan<byte> rosLocalBuffer)
         {
-            LogTrace($"OSScanTransponder.ProcessTransponders() - Received Bytes {rosLocalBuffer.Length}");
+            if (lCurrentLogger.IsTraceEnabled)
+                LogTrace($"OSScanTransponder.ProcessTransponders() - Received Bytes {rosLocalBuffer.Length}");
 
             var otsiCurrentOSTransportStreamInfo = ostLocalOSScanTransponder.otsiOSTransportStreamInfo;
 

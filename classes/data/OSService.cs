@@ -3,6 +3,7 @@
 public class OSService
 {
     public OSList<OSEvent> oloeOSListOSEvent = [];
+    public Dictionary<(byte byTableID, int iEventID), LinkedListNode<OSEvent>> dtllnOSEventsByID = [];
     public List<int> liAudioPacketIdentifiers = [];
     public List<byte> lbAudioPacketIdentifiersStreamType = [];
     public List<string> lsAudioPacketIdentifiersLanguage = [];

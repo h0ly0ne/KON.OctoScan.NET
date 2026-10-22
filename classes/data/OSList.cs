@@ -15,17 +15,6 @@ public class OSList<T> : LinkedList<T>
     }
 
     /// <summary>
-    /// OSList.IsEmpty()
-    /// </summary>
-    /// <returns>bool</returns>
-    public bool IsEmpty()
-    {
-        LogTrace("OSList.IsEmpty()");
-
-        return Count == 0;
-    }
-
-    /// <summary>
     /// OSList.Add(T)
     /// </summary>
     /// <param name="TCurrentValue"></param>
@@ -33,18 +22,6 @@ public class OSList<T> : LinkedList<T>
     {
         LogTrace("OSList.Add()");
 
-        AddFirst(TCurrentValue);
-    }
-
-    /// <summary>
-    /// OSList.Nodes()
-    /// </summary>
-    /// <returns>IEnumerable(LinkedListNode(T))</returns>
-    public IEnumerable<LinkedListNode<T>> Nodes()
-    {
-        LogTrace("OSList.Nodes()");
-
-        for (var llnCurrentNode = First; llnCurrentNode != null; llnCurrentNode = llnCurrentNode.Next)
-            yield return llnCurrentNode;
+        AddLast(TCurrentValue);
     }
 }

@@ -120,6 +120,16 @@ namespace KON.OctoScan.NET
 
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
+            Console.CancelKeyPress += delegate(object? _, ConsoleCancelEventArgs ceaLocalEventArgs)
+            {
+                if (bDone)
+                    return;
+
+                ceaLocalEventArgs.Cancel = true;
+                bDone = true;
+                lCurrentLogger.Warn("-» Cancelled - closing the SAT>IP session ...".Pastel(ConsoleColor.Yellow));
+            };
+
             var pCurrentParser = new Parser(apsCurrentConfiguration =>
             {
                 apsCurrentConfiguration.HelpWriter = null;
@@ -310,7 +320,7 @@ namespace KON.OctoScan.NET
                                 case FlagModulationSystem.DVBS:
                                 case FlagModulationSystem.DVBS2:
                                 {
-                                    if (oLocalOptions.cloModulationType == FlagModulationType.None)
+                                    if (oLocalOptions is { cloModulationSystem: FlagModulationSystem.DVBS2, cloModulationType: FlagModulationType.None })
                                         saLocalCustomCondition = [.. saLocalCustomCondition, "modulationtype"];
 
                                     if (oLocalOptions.cloSatelliteSource is null or <= 0 or > 4)
@@ -385,7 +395,7 @@ namespace KON.OctoScan.NET
                             foreach (var iCurrentFrequency in ParseFrequencies(oLocalOptions.cloFrequencies!))
                                 osiCurrentOSScanIP.AddTransponderInfo(CreateTransponderInfo(oLocalOptions, iCurrentFrequency));
 
-                            osiCurrentOSScanIP.Scan(oLocalOptions);
+                            osiCurrentOSScanIP.Scan(oLocalOptions.cloScanRetries, oLocalOptions.cloTunerLockGraceTime, oLocalOptions.cloServerPort, oLocalOptions.cloIPv6);
                             bDone = true;
 
                             foreach (var otiCurrentOSTransponderInfo in osiCurrentOSScanIP.olotiOSListOSTransponderInfoDone?.OfType<OSTransponderInfo>() ?? [])

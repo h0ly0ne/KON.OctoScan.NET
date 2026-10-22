@@ -21,6 +21,7 @@ public static class Constants
     public const int RTSP_RESPONSE_COMPLETION_WAIT = 250;
     public const int RTSP_DEFAULT_SESSION_TIMEOUT = 60;
     public const int PID_UPDATE_MIN_INTERVAL = 250;
+    public const int MAX_PID_LIST_LENGTH = 300;
     public const int FILTER_TIMEOUT_PAT = 5;
     public const int FILTER_TIMEOUT_SDT = 5;
     public const int FILTER_TIMEOUT_PMT = 5;

@@ -258,7 +258,13 @@ public static class OSTransportStreamFilter_Extension
                         otiCurrentOSTransponderInfo.iPolarisation = 1 ^ ((byFlagsByte & 0x60) >> 5);
                         otiCurrentOSTransponderInfo.iRollOff = (byFlagsByte & 0x18) >> 3;
                         otiCurrentOSTransponderInfo.iType = otiCurrentOSTransponderInfo.iModulationSystem = (byFlagsByte & 0x04) != 0 ? 6 : 5;
-                        otiCurrentOSTransponderInfo.iModulationType = byFlagsByte & 0x03;
+                        otiCurrentOSTransponderInfo.iModulationType = (byFlagsByte & 0x03) switch
+                        {
+                            1 => Array.IndexOf(ModulationType2String, "qpsk"),
+                            2 => Array.IndexOf(ModulationType2String, "8psk"),
+                            3 => Array.IndexOf(ModulationType2String, "16qam"),
+                            _ => -1
+                        };
 
                         otiCurrentOSTransponderInfo.iFEC = byaCurrentBuffer[iDescriptorPosition + 12] & 0x0F;
                         otiCurrentOSTransponderInfo.iSource = otiParentOSTransponderInfo.iSource;
@@ -333,13 +339,21 @@ public static class OSTransportStreamFilter_Extension
 
                 for (var iCurrentDescriptorPosition = iCurrentServicePosition + 5; iCurrentDescriptorPosition + 2 <= iCurrentDescriptorsEnd; iCurrentDescriptorPosition += 2 + byaCurrentBuffer[iCurrentDescriptorPosition + 1])
                 {
-                    if (byaCurrentBuffer[iCurrentDescriptorPosition] != DESCRIPTORTAG_SERVICE_DESCRIPTOR)
+                    if (byaCurrentBuffer[iCurrentDescriptorPosition] != DESCRIPTORTAG_SERVICE_DESCRIPTOR || byaCurrentBuffer[iCurrentDescriptorPosition + 1] < 3)
                         continue;
 
+                    var iDescriptorEnd = Math.Min(iCurrentDescriptorPosition + 2 + byaCurrentBuffer[iCurrentDescriptorPosition + 1], iCurrentDescriptorsEnd);
                     var iProviderNamePosition = iCurrentDescriptorPosition + 4;
                     var iProviderNameLength = byaCurrentBuffer[iCurrentDescriptorPosition + 3];
                     var iServiceNamePosition = iProviderNamePosition + iProviderNameLength + 1;
-                    var iServiceNameLength = byaCurrentBuffer[iProviderNamePosition + iProviderNameLength];
+
+                    if (iServiceNamePosition > iDescriptorEnd || iServiceNamePosition + byaCurrentBuffer[iServiceNamePosition - 1] > iDescriptorEnd)
+                    {
+                        LogTrace($"Service descriptor of SID {iCurrentServiceID} with invalid name lengths skipped");
+                        continue;
+                    }
+
+                    var iServiceNameLength = byaCurrentBuffer[iServiceNamePosition - 1];
 
                     osCurrentOSService.strProviderName = DecodeDVBString(byaCurrentBuffer.AsSpan(iProviderNamePosition, iProviderNameLength));
                     osCurrentOSService.strName = DecodeDVBString(byaCurrentBuffer.AsSpan(iServiceNamePosition, iServiceNameLength));
@@ -380,6 +394,7 @@ public static class OSTransportStreamFilter_Extension
 
                     if (llnCurrentNode.Value.bTableID == byCurrentTableID)
                     {
+                        osCurrentOSService.dtllnOSEventsByID.Remove((llnCurrentNode.Value.bTableID, llnCurrentNode.Value.iEventID));
                         osCurrentOSService.oloeOSListOSEvent.Remove(llnCurrentNode);
                         iEITEventsDeleted += 1;
                     }
@@ -417,12 +432,19 @@ public static class OSTransportStreamFilter_Extension
                     if (byaCurrentBuffer[iCurrentDescriptorPosition] != DESCRIPTORTAG_SHORT_EVENT_DESCRIPTOR || byaCurrentBuffer[iCurrentDescriptorPosition + 1] < 5)
                         continue;
 
-                    oeCurrentOSEvent.strLanguage = GetEventLanguageCode(Encoding.ASCII.GetString(byaCurrentBuffer, iCurrentDescriptorPosition + 2, 3));
-
+                    var iDescriptorEnd = Math.Min(iCurrentDescriptorPosition + 2 + byaCurrentBuffer[iCurrentDescriptorPosition + 1], iDescriptorsEnd);
                     var iNamePosition = iCurrentDescriptorPosition + 6;
                     var iNameLength = byaCurrentBuffer[iCurrentDescriptorPosition + 5];
                     var iTextPosition = iNamePosition + iNameLength + 1;
-                    var iTextLength = byaCurrentBuffer[iNamePosition + iNameLength];
+
+                    if (iTextPosition > iDescriptorEnd || iTextPosition + byaCurrentBuffer[iTextPosition - 1] > iDescriptorEnd)
+                    {
+                        LogTrace($"Short event descriptor of event {oeCurrentOSEvent.iEventID} (SID {iCurrentServiceID}) with invalid lengths skipped");
+                        continue;
+                    }
+
+                    var iTextLength = byaCurrentBuffer[iTextPosition - 1];
+                    oeCurrentOSEvent.strLanguage = GetEventLanguageCode(Encoding.ASCII.GetString(byaCurrentBuffer, iCurrentDescriptorPosition + 2, 3));
 
                     if (iNameLength > 0)
                         oeCurrentOSEvent.strName = DecodeDVBString(byaCurrentBuffer.AsSpan(iNamePosition, iNameLength));
@@ -436,12 +458,10 @@ public static class OSTransportStreamFilter_Extension
                 if (osCurrentOSService == null)
                     continue;
 
-                var llnExistingEvent = osCurrentOSService.oloeOSListOSEvent.Nodes().FirstOrDefault(llnCurrentNode => llnCurrentNode.Value.bTableID == byCurrentTableID && llnCurrentNode.Value.iEventID == oeCurrentOSEvent.iEventID);
-
-                if (llnExistingEvent != null)
+                if (osCurrentOSService.dtllnOSEventsByID.TryGetValue((byCurrentTableID, oeCurrentOSEvent.iEventID), out var llnExistingEvent))
                     llnExistingEvent.Value = oeCurrentOSEvent;
                 else
-                    osCurrentOSService.oloeOSListOSEvent.Add(oeCurrentOSEvent);
+                    osCurrentOSService.dtllnOSEventsByID[(byCurrentTableID, oeCurrentOSEvent.iEventID)] = osCurrentOSService.oloeOSListOSEvent.AddLast(oeCurrentOSEvent);
             }
 
             return true;

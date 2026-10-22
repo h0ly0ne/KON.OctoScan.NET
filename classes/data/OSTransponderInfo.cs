@@ -44,7 +44,8 @@ public class OSTransponderInfo
             "dvbc" => $"freq={strCurrentFrequency}&msys=dvbc&sr={iSymbolRate}&mtype={ModulationType2String.ElementAtOrDefault(iModulationType)}",
             "dvbt" => $"freq={strCurrentFrequency}&msys=dvbt&bw={Bandwidth2String.ElementAtOrDefault(iBandwidth)}",
             "dvbt2" => $"freq={strCurrentFrequency}&msys=dvbt2&bw={Bandwidth2String.ElementAtOrDefault(iBandwidth)}&plp={iInputStreamID}",
-            "dvbs" or "dvbs2" => $"src={iSource}&freq={iFrequency}&pol={Polarisation2String[iPolarisation & 3]}&msys={ModulationSystem2String[iModulationSystem]}&sr={iSymbolRate}",
+            "dvbs" => $"src={iSource}&freq={iFrequency}&pol={Polarisation2String[iPolarisation & 3]}&msys=dvbs&sr={iSymbolRate}",
+            "dvbs2" => $"src={iSource}&freq={iFrequency}&pol={Polarisation2String[iPolarisation & 3]}&msys=dvbs2{(ModulationType2String.ElementAtOrDefault(iModulationType) is { } strCurrentModulationType ? $"&mtype={strCurrentModulationType}" : string.Empty)}&sr={iSymbolRate}",
             _ => string.Empty
         };
     }

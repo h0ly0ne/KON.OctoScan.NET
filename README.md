@@ -75,7 +75,7 @@ Copyright (C) 2024-2026 Oswald Oliver
 
 * e.g.: Scan a DVB-S transponder (satellite source 1, horizontal polarisation)
     --mode Scan --serverip 192.168.1.10 --serverport 554 --frequencies 12188 --modulationsystem DVBS
-    --modulationtype TQPSK --symbolrate 27500 --satellitesource 1 --polarisation h
+    --symbolrate 27500 --satellitesource 1 --polarisation h
 
 * e.g.: Scan DVB-S2 transponders (satellite source 1, vertical polarisation)
     --mode Scan --serverip 192.168.1.10 --serverport 554 --frequencies 11494,11523

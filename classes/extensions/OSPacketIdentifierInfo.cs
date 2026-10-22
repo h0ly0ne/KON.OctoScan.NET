@@ -24,9 +24,10 @@ public static class OSPacketIdentifierInfo_Extension
             var byCurrentContinuityCounter = (byte)(rosLocalPacket[3] & 0x0F);
             var bIsValid = ((opiiLocalOSPacketIdentifierInfo.byContinuityCounter + 1) & 0x0F) == byCurrentContinuityCounter || opiiLocalOSPacketIdentifierInfo.byContinuityCounter == byte.MaxValue;
 
-            if (bIsValid)
-                opiiLocalOSPacketIdentifierInfo.byContinuityCounter = byCurrentContinuityCounter;
-            else
+            // After a lost packet the counter is synchronized again - otherwise every following packet would fail as well
+            opiiLocalOSPacketIdentifierInfo.byContinuityCounter = byCurrentContinuityCounter;
+
+            if (!bIsValid)
                 opiiLocalOSPacketIdentifierInfo.Reset();
 
             return bIsValid;
@@ -210,6 +211,9 @@ public static class OSPacketIdentifierInfo_Extension
                 {
                     otsfCurrentOSTransportStreamFilter.bDone = true;
                     olotsfCurrentOSListOSTransportStreamFilter.Remove(llnCurrentNode);
+
+                    if (otsiCurrentOSTransportStreamInfo != null)
+                        otsiCurrentOSTransportStreamInfo.bPIDListCheckRequired = true;
                 }
                 else
                     otsfCurrentOSTransportStreamFilter.lTimestamp = opiiLocalOSPacketIdentifierInfo.otsiOSTransportStreamInfo?.GetStreamTime() ?? 0;
@@ -231,6 +235,11 @@ public static class OSPacketIdentifierInfo_Extension
             var iIndex = TS_PACKET_LENGTH - iToDo;
 
             if (iToDo == 0)
+                return false;
+
+            // A duplicate packet (same continuity counter, ISO/IEC 13818-1 2.4.3.3) repeats the previous payload - it is ignored
+            // instead of being treated as a continuity error that discards the section in progress
+            if (opiiLocalOSPacketIdentifierInfo.byContinuityCounter != byte.MaxValue && (rosLocalPacket[3] & 0x0F) == opiiLocalOSPacketIdentifierInfo.byContinuityCounter)
                 return false;
 
             var iOffset = (rosLocalPacket[1] & 0x40) != 0 ? rosLocalPacket[iIndex++] : iToDo;

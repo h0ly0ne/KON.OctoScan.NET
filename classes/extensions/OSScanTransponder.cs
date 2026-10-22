@@ -693,6 +693,9 @@ public static class OSScanTransponder_Extension
         {
             LogTrace("OSScanTransponder.UpdatePIDs()");
 
+            if (ostLocalOSScanTransponder.otsiOSTransportStreamInfo != null)
+                ostLocalOSScanTransponder.otsiOSTransportStreamInfo.bPIDListCheckRequired = false;
+
             var lopiiCurrentRequestedPIDs = ostLocalOSScanTransponder.GetPIDsToRequest(out var strCurrentPIDs);
             var bCurrentResult = ostLocalOSScanTransponder.RTSPSendPlay(strCurrentPIDs) && ostLocalOSScanTransponder.RTSPCheckOK();
 
@@ -801,6 +804,12 @@ public static class OSScanTransponder_Extension
                 }
             }
 
+            // The PID list is only checked again after filters were added, finished or timed out
+            if (!otsiCurrentOSTransportStreamInfo.bPIDsChanged && !otsiCurrentOSTransportStreamInfo.bPIDListCheckRequired)
+                return true;
+
+            otsiCurrentOSTransportStreamInfo.bPIDListCheckRequired = false;
+
             if (!otsiCurrentOSTransportStreamInfo.bPIDsChanged && ostLocalOSScanTransponder.GetPIDsToRequest(out _).TrueForAll(opiiCurrentOSPacketIdentifierInfo => opiiCurrentOSPacketIdentifierInfo.bRequested))
                 return true;
 
@@ -869,6 +878,9 @@ public static class OSScanTransponder_Extension
 
             olotsfCurrentOSListOSTransportStreamFilter.AddLast(otsfCurrentOSTransportStreamFilter);
             opiiCurrentOSPacketIdentifierInfo.otsiOSTransportStreamInfo?.olotsfOSListOSTransportStreamFilter?.AddLast(otsfCurrentOSTransportStreamFilter);
+
+            if (opiiCurrentOSPacketIdentifierInfo.otsiOSTransportStreamInfo != null)
+                opiiCurrentOSPacketIdentifierInfo.otsiOSTransportStreamInfo.bPIDListCheckRequired = true;
         }
 
         /// <summary>
@@ -908,6 +920,7 @@ public static class OSScanTransponder_Extension
                 else if (llnCurrentNode.Value.opiiOSPacketIdentifierInfo is { bRequested: true } && lCurrentTimestamp >= llnCurrentNode.Value.lTimestamp + llnCurrentNode.Value.lTimeout)
                 {
                     llnCurrentNode.Value.bTimedOut = true;
+                    otsiCurrentOSTransportStreamInfo.bPIDListCheckRequired = true;
 
                     if (llnCurrentNode.Value.byTableID == DEFAULT_TID_PM)
                         otsiCurrentOSTransportStreamInfo.lotsfTimedOutProgramMapTables.Add(llnCurrentNode.Value);

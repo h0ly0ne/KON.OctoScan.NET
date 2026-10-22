@@ -200,7 +200,7 @@ namespace KON.OctoScan.NET
                 htCurrentHelpText.AddPostOptionsLine($"");
                 htCurrentHelpText.AddPostOptionsLine($"* e.g.: Scan a DVB-S transponder (satellite source 1, horizontal polarisation)".Pastel(Color.Chocolate));
                 htCurrentHelpText.AddPostOptionsLine($"    --mode Scan --serverip 192.168.1.10 --serverport 554 --frequencies 12188 --modulationsystem DVBS");
-                htCurrentHelpText.AddPostOptionsLine($"    --modulationtype TQPSK --symbolrate 27500 --satellitesource 1 --polarisation h");
+                htCurrentHelpText.AddPostOptionsLine($"    --symbolrate 27500 --satellitesource 1 --polarisation h");
                 htCurrentHelpText.AddPostOptionsLine($"");
                 htCurrentHelpText.AddPostOptionsLine($"* e.g.: Scan DVB-S2 transponders (satellite source 1, vertical polarisation)".Pastel(Color.Chocolate));
                 htCurrentHelpText.AddPostOptionsLine($"    --mode Scan --serverip 192.168.1.10 --serverport 554 --frequencies 11494,11523");

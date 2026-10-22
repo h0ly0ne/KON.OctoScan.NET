@@ -26,6 +26,7 @@ public class OSTransportStreamInfo : IDisposable
     public long lFirstDataWallTime;
     public long lFirstDataStreamClock;
     public bool bPIDsChanged;
+    public bool bPIDListCheckRequired;
     public long lLastPIDUpdate;
     public int iPIDRefreshes;
 
@@ -51,6 +52,7 @@ public class OSTransportStreamInfo : IDisposable
         lFirstDataWallTime = 0;
         lFirstDataStreamClock = 0;
         bPIDsChanged = false;
+        bPIDListCheckRequired = false;
         lLastPIDUpdate = 0;
         iPIDRefreshes = 0;
         lotsfTimedOutProgramMapTables = [];

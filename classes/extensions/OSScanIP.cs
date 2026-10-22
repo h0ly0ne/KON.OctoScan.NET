@@ -1,4 +1,6 @@
 ﻿using System.Data;
+using System.Diagnostics;
+using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 
@@ -105,7 +107,7 @@ public static class OSScanIP_Extension
 
                     lCurrentLogger.Info($"TUNE {osicCurrentOSSatIPConnection.strTune}".Pastel(ConsoleColor.Magenta));
 
-                    var lStartTime = CurrentTimestamp();
+                    var swCurrentDuration = Stopwatch.StartNew();
 
                     Retry(iLocalScanRetries ?? TRANSPONDER_SCAN_RETRIES, delegate
                     {
@@ -118,7 +120,6 @@ public static class OSScanIP_Extension
                     }, out var iCurrentRetries);
 
                     otiCurrentOSTransponderInfo.ltiiMissingProgramMapTables = ostCurrentOSScanTransponder.bFailed || ostCurrentOSScanTransponder.bNoSignal ? [] : otsiCurrentOSTransportStreamInfo.lotsfTimedOutProgramMapTables.Where(otsfCurrentOSTransportStreamFilter => otsfCurrentOSTransportStreamFilter.opiiOSPacketIdentifierInfo != null).Select(otsfCurrentOSTransportStreamFilter => (otsfCurrentOSTransportStreamFilter.opiiOSPacketIdentifierInfo!.iPacketID, otsfCurrentOSTransportStreamFilter.iTableExtension)).Distinct().ToList();
-                    var lEndTime = CurrentTimestamp();
                     otsiCurrentOSTransportStreamInfo.Dispose();
                     osiLocalOSScanIP.olotiOSListOSTransponderInfo.Remove(otiCurrentOSTransponderInfo);
                     osiLocalOSScanIP.olotiOSListOSTransponderInfoDone?.AddLast(otiCurrentOSTransponderInfo);
@@ -133,7 +134,7 @@ public static class OSScanIP_Extension
                     };
                     var ccCurrentResultColor = ostCurrentOSScanTransponder.bFailed && !bDone ? ConsoleColor.Red : bDone || ostCurrentOSScanTransponder.bNoSignal || ostCurrentOSScanTransponder.bTimeout ? ConsoleColor.Yellow : ConsoleColor.Green;
 
-                    lCurrentLogger.Info($"OPERATION(S) {strCurrentResult} (AND TOOK {lEndTime - lStartTime} SECOND(S) - RETRIES: {iCurrentRetries})".Pastel(ccCurrentResultColor));
+                    lCurrentLogger.Info($"OPERATION(S) {strCurrentResult} (AND TOOK {swCurrentDuration.Elapsed.TotalSeconds.ToString("F1", CultureInfo.InvariantCulture)} SECOND(S) - RETRIES: {iCurrentRetries})".Pastel(ccCurrentResultColor));
                 }
 
                 osiLocalOSScanIP.ScanMissingProgramMapTables(iLocalScanRetries, iLocalTunerLockGraceTime);
@@ -171,7 +172,7 @@ public static class OSScanIP_Extension
                 osicCurrentOSSatIPConnection.strTune = otiCurrentOSTransponderInfo.ToString();
                 ostCurrentOSScanTransponder.otiOSTransponderInfo = otiCurrentOSTransponderInfo;
                 lCurrentLogger.Info($"TUNE {osicCurrentOSSatIPConnection.strTune} (WAITING FOR {ltiiCurrentMissing.Count} PMT(S))".Pastel(ConsoleColor.Magenta));
-                var lStartTime = CurrentTimestamp();
+                var swCurrentDuration = Stopwatch.StartNew();
 
                 Retry(iLocalScanRetries ?? TRANSPONDER_SCAN_RETRIES, delegate
                 {
@@ -195,7 +196,7 @@ public static class OSScanIP_Extension
                 var strCurrentResult = ostCurrentOSScanTransponder.bFailed ? $"FAILED{(ostCurrentOSScanTransponder.strFailReason != null ? $" ({ostCurrentOSScanTransponder.strFailReason})" : string.Empty)}" : $"{iCurrentReceived} OF {ltiiCurrentMissing.Count} PMT(S) RECEIVED";
                 var ccCurrentResultColor = ostCurrentOSScanTransponder.bFailed ? ConsoleColor.Red : ltiiCurrentStillMissing.Count > 0 ? ConsoleColor.Yellow : ConsoleColor.Green;
 
-                lCurrentLogger.Info($"OPERATION(S) {strCurrentResult} (AND TOOK {CurrentTimestamp() - lStartTime} SECOND(S) - RETRIES: {iCurrentRetries})".Pastel(ccCurrentResultColor));
+                lCurrentLogger.Info($"OPERATION(S) {strCurrentResult} (AND TOOK {swCurrentDuration.Elapsed.TotalSeconds.ToString("F1", CultureInfo.InvariantCulture)} SECOND(S) - RETRIES: {iCurrentRetries})".Pastel(ccCurrentResultColor));
             }
         }
 

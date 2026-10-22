@@ -91,17 +91,6 @@ public static class Global
     }
 
     /// <summary>
-    /// Global.CurrentTimestamp()
-    /// </summary>
-    /// <returns>long</returns>
-    public static long CurrentTimestamp()
-    {
-        LogTrace("Global.CurrentTimestamp()");
-
-        return DateTimeOffset.Now.ToUnixTimeSeconds();
-    }
-
-    /// <summary>
     /// Global.Retry()
     /// </summary>
     /// <param name="iLocalRetries"></param>

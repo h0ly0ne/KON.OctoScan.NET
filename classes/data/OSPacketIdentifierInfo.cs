@@ -16,6 +16,9 @@ public class OSPacketIdentifierInfo : IDisposable
     public byte[]? byaBuffer;
     public int iPacketsReceived;
     public bool bRequested;
+    public bool bScramblingProbe;
+    public int iProbePackets;
+    public int iProbeScrambledPackets;
 
     /// <summary>
     /// OSPacketIdentifierInfo.Init()
@@ -31,6 +34,9 @@ public class OSPacketIdentifierInfo : IDisposable
         otsiOSTransportStreamInfo = tsiLocalTSInfo;
         iPacketsReceived = 0;
         bRequested = false;
+        bScramblingProbe = false;
+        iProbePackets = 0;
+        iProbeScrambledPackets = 0;
     }
 
     /// <summary>

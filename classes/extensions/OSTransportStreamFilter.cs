@@ -96,12 +96,22 @@ public static class OSTransportStreamFilter_Extension
             osCurrentOSService.liAudioPacketIdentifiers = [];
             osCurrentOSService.lbAudioPacketIdentifiersStreamType = [];
             osCurrentOSService.lsAudioPacketIdentifiersLanguage = [];
+            osCurrentOSService.lsAudioPacketIdentifiersCodec = [];
             osCurrentOSService.liOtherPacketIdentifiers = [];
             osCurrentOSService.lbOtherPacketIdentifiersStreamType = [];
+            osCurrentOSService.liCASystemIDs = [];
 
             var iSectionEnd = opiiCurrentOSPacketIdentifierInfo.iBufferLength - 4;
             var iProgramInfoLength = byaCurrentBuffer.ToDVBLengthAsInteger(10);
             var iCurrentStreamPosition = 12 + iProgramInfoLength;
+            var iProgramInfoEnd = Math.Min(iCurrentStreamPosition, iSectionEnd);
+
+            // CA_descriptor in the program info - valid for all elementary streams of the service
+            for (var iCurrentDescriptorPosition = 12; iCurrentDescriptorPosition + 2 <= iProgramInfoEnd; iCurrentDescriptorPosition += 2 + byaCurrentBuffer[iCurrentDescriptorPosition + 1])
+            {
+                if (byaCurrentBuffer[iCurrentDescriptorPosition] == DESCRIPTORTAG_CA_DESCRIPTOR && byaCurrentBuffer[iCurrentDescriptorPosition + 1] >= 4 && iCurrentDescriptorPosition + 6 <= iProgramInfoEnd)
+                    AddCASystem(osCurrentOSService, byaCurrentBuffer, iCurrentDescriptorPosition);
+            }
 
             if (lCurrentLogger.IsTraceEnabled)
             {
@@ -131,6 +141,7 @@ public static class OSTransportStreamFilter_Extension
                 var bIsTeletext = false;
                 var bIsSubtitle = false;
                 string? strLanguage = null;
+                string? strCodec = null;
 
                 for (var iCurrentESDescriptorPosition = iCurrentStreamPosition + 5; iCurrentESDescriptorPosition + 2 <= iESDescriptorEnd; iCurrentESDescriptorPosition += 2 + byaCurrentBuffer[iCurrentESDescriptorPosition + 1])
                 {
@@ -151,10 +162,30 @@ public static class OSTransportStreamFilter_Extension
                         case ElementaryStreamDescriptors.enhanced_ac3_descriptor:
                         case ElementaryStreamDescriptors.DTS_descriptor:
                         case ElementaryStreamDescriptors.AAC_descriptor:
-                            bIsAudio |= iESDescriptorLength != 0;
+                            if (iESDescriptorLength == 0)
+                                break;
+
+                            bIsAudio = true;
+                            strCodec ??= (ElementaryStreamDescriptors)byaCurrentBuffer[iCurrentESDescriptorPosition] switch
+                            {
+                                ElementaryStreamDescriptors.AC_3_descriptor => AUDIO_CODEC_AC3,
+                                ElementaryStreamDescriptors.enhanced_ac3_descriptor => AUDIO_CODEC_EAC3,
+                                ElementaryStreamDescriptors.DTS_descriptor => AUDIO_CODEC_DTS,
+                                _ => AUDIO_CODEC_AAC
+                            };
+                            break;
+                        case ElementaryStreamDescriptors.CA_descriptor when iESDescriptorLength >= 4 && iCurrentESDescriptorPosition + 6 <= iESDescriptorEnd:
+                            AddCASystem(osCurrentOSService, byaCurrentBuffer, iCurrentESDescriptorPosition);
                             break;
                         case ElementaryStreamDescriptors.extension_descriptor when iESDescriptorLength >= 1 && EXTENSION_DESCRIPTOR_AUDIO_TAGS.Contains(byaCurrentBuffer[iCurrentESDescriptorPosition + 2]):
                             bIsAudio = true;
+                            // supplementary_audio_descriptor (0x06) only describes the purpose of the track, not its codec
+                            strCodec ??= byaCurrentBuffer[iCurrentESDescriptorPosition + 2] switch
+                            {
+                                0x15 => AUDIO_CODEC_AC4,
+                                0x0E or 0x0F or 0x21 => AUDIO_CODEC_DTS,
+                                _ => null
+                            };
                             break;
                         case ElementaryStreamDescriptors.ISO_639_language_descriptor when iESDescriptorLength >= 3:
                             strLanguage ??= GetISO639LanguageCode(Encoding.ASCII.GetString(byaCurrentBuffer, iCurrentESDescriptorPosition + 2, 3));
@@ -180,6 +211,7 @@ public static class OSTransportStreamFilter_Extension
                     osCurrentOSService.liAudioPacketIdentifiers.Add(iElementaryPID);
                     osCurrentOSService.lbAudioPacketIdentifiersStreamType.Add(byStreamType);
                     osCurrentOSService.lsAudioPacketIdentifiersLanguage.Add(strLanguage ?? "und");
+                    osCurrentOSService.lsAudioPacketIdentifiersCodec.Add(strCodec ?? GetAudioCodec(byStreamType));
                 }
                 else
                 {
@@ -200,6 +232,16 @@ public static class OSTransportStreamFilter_Extension
             }
 
             osCurrentOSService.bGotFromProgramMapTable = true;
+
+            // Scrambling probe on the first audio PID (low data rate), video only for services without audio
+            var iCurrentProbePID = osCurrentOSService.liAudioPacketIdentifiers.Count > 0 ? osCurrentOSService.liAudioPacketIdentifiers[0] : osCurrentOSService.iVideoPacketIdentifier;
+            var otsiCurrentOSTransportStreamInfo = opiiCurrentOSPacketIdentifierInfo.otsiOSTransportStreamInfo;
+
+            if (iCurrentProbePID != 0 && otsiCurrentOSTransportStreamInfo?.opiiOSPacketIdentifierInfo?[iCurrentProbePID] is { } opiiCurrentProbePID && (!opiiCurrentProbePID.bUsed || opiiCurrentProbePID.bScramblingProbe))
+            {
+                otsiCurrentOSTransportStreamInfo.ostOSScanTransponder?.AddSFilter(iCurrentProbePID, TID_SCRAMBLING_PROBE, iServiceID, 2, FILTER_TIMEOUT_SCRAMBLING_PROBE);
+                opiiCurrentProbePID.bScramblingProbe = true;
+            }
 
             return true;
         }
@@ -329,9 +371,7 @@ public static class OSTransportStreamFilter_Extension
                 osCurrentOSService.iEventInformationTableSchedule = (byEitFlagsByte & 0x02) >> 1;
                 osCurrentOSService.iEventInformationTablePresentFollowing = byEitFlagsByte & 0x01;
 
-                var byStatusFlagsByte = byaCurrentBuffer[iCurrentServicePosition + 3];
-                osCurrentOSService.iConditionalAccessMode = (byStatusFlagsByte & 0x10) >> 4;
-                osCurrentOSService.iRunningStatus = (byStatusFlagsByte & 0xE0) >> 5;
+                osCurrentOSService.iRunningStatus = (byaCurrentBuffer[iCurrentServicePosition + 3] & 0xE0) >> 5;
 
                 if (otiCurrentOSTransponderInfo is { bScanEventInformationTable: true } && osCurrentOSService.iEventInformationTableSchedule != 0)
                     if (otiCurrentOSTransponderInfo.iaEventInformationTableServiceID[0] == 0 || otiCurrentOSTransponderInfo.iaEventInformationTableServiceID.Contains(iCurrentServiceID))
@@ -469,6 +509,27 @@ public static class OSTransportStreamFilter_Extension
     }
 
     /// <summary>
+    /// OSTransportStreamFilter.AddCASystem() - CA_system_ID of a CA_descriptor, each ID only once
+    /// </summary>
+    /// <param name="osLocalOSService"></param>
+    /// <param name="byaLocalBuffer"></param>
+    /// <param name="iLocalDescriptorPosition">Position of the descriptor tag</param>
+    private static void AddCASystem(OSService osLocalOSService, byte[] byaLocalBuffer, int iLocalDescriptorPosition)
+    {
+        LogTrace("OSTransportStreamFilter.AddCASystem()");
+
+        var iCurrentCASystemID = byaLocalBuffer.ToUShortAsInteger(iLocalDescriptorPosition + 2);
+
+        if (osLocalOSService.liCASystemIDs.Contains(iCurrentCASystemID))
+            return;
+
+        osLocalOSService.liCASystemIDs.Add(iCurrentCASystemID);
+
+        if (lCurrentLogger.IsTraceEnabled)
+            LogTrace($"CA System ID: 0x{iCurrentCASystemID:X4}");
+    }
+
+    /// <summary>
     /// OSTransportStreamFilter.IsVideoStreamType()
     /// </summary>
     /// <param name="byLocalStreamType"></param>
@@ -485,6 +546,27 @@ public static class OSTransportStreamFilter_Extension
             or MPEG2TSStreamType.Chinese_Video_Standard_CAVS_Video
             or MPEG2TSStreamType.BBC_Dirac_Ultra_HD_Video
             or MPEG2TSStreamType.Private_ES_VC1_Video;
+    }
+
+    /// <summary>
+    /// OSTransportStreamFilter.GetAudioCodec() - codec of an audio track from its stream type (tracks without codec descriptor)
+    /// </summary>
+    /// <param name="byLocalStreamType"></param>
+    /// <returns>string</returns>
+    private static string GetAudioCodec(byte byLocalStreamType)
+    {
+        LogTrace("OSTransportStreamFilter.GetAudioCodec()");
+
+        return (MPEG2TSStreamType)byLocalStreamType switch
+        {
+            MPEG2TSStreamType.ISO_IEC_11172_3_MPEG1_Audio or MPEG2TSStreamType.ISO_IEC_13818_3_MPEG2_Audio => AUDIO_CODEC_MPEG,
+            MPEG2TSStreamType.ISO_IEC_13818_7_AAC_Audio or MPEG2TSStreamType.ISO_IEC_14496_3_LATM_AAC_Audio => AUDIO_CODEC_AAC,
+            MPEG2TSStreamType.A52_AC3_Audio => AUDIO_CODEC_AC3,
+            MPEG2TSStreamType.EAC3_Audio => AUDIO_CODEC_EAC3,
+            MPEG2TSStreamType.HDMV_DTS_Audio or MPEG2TSStreamType.DTS_HD_Audio or MPEG2TSStreamType.DTS_Audio => AUDIO_CODEC_DTS,
+            MPEG2TSStreamType.LPCM_TrueHD_Audio => AUDIO_CODEC_TRUEHD,
+            _ => AUDIO_CODEC_UNKNOWN
+        };
     }
 
     /// <summary>

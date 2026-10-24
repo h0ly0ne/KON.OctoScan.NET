@@ -29,6 +29,12 @@ public static class Constants
     public const int FILTER_TIMEOUT_EIT = 15;
     public const int FILTER_TIMEOUT_EIT_SCHEDULE = 45;
     public const int FILTER_TIMEOUT_PMT_SECOND_PASS = 30;
+
+    // Scrambling probe - a few packets of one elementary stream per service show whether it is actually scrambled
+    // (transport_scrambling_control). 0xFF is never a real table_id (stuffing), it marks the probe filters.
+    public const byte TID_SCRAMBLING_PROBE = 0xFF;
+    public const int SCRAMBLING_PROBE_PACKETS = 10;
+    public const int FILTER_TIMEOUT_SCRAMBLING_PROBE = 5;
     public const int PID_REFRESH_TIMEOUT = 1000;
     public const int MAX_PID_REFRESHES = 2;
     public static readonly int[] RTSP_TRANSIENT_STATUS_CODES = [408, 453, 454, 500, 503];
@@ -59,11 +65,22 @@ public static class Constants
     public const int DEFAULT_TID_NI_CURRENT = 0x40;
     public const int DEFAULT_TID_SD = 0x42;
     public const int DEFAULT_TID_EI = 0x50;
+    public const int DESCRIPTORTAG_CA_DESCRIPTOR = 0x09;
     public const int DESCRIPTORTAG_SERVICE_DESCRIPTOR = 0x48;
     public const int DESCRIPTORTAG_SHORT_EVENT_DESCRIPTOR = 0x4D;
     public const int DESCRIPTORTAG_SATELLITE_DELIVERY_SYSTEM_DESCRIPTOR = 0x43;
     public const int DESCRIPTORTAG_CABLE_DELIVERY_SYSTEM_DESCRIPTOR = 0x44;
     public static readonly byte[] EXTENSION_DESCRIPTOR_AUDIO_TAGS = [0x06, 0x0E, 0x0F, 0x15, 0x21];
+
+    // Codec of an audio track (descriptor of the PMT, otherwise stream type) - AC3, EAC3 and AC4 are Dolby
+    public const string AUDIO_CODEC_MPEG = "MPEG";
+    public const string AUDIO_CODEC_AAC = "AAC";
+    public const string AUDIO_CODEC_AC3 = "AC3";
+    public const string AUDIO_CODEC_EAC3 = "EAC3";
+    public const string AUDIO_CODEC_AC4 = "AC4";
+    public const string AUDIO_CODEC_DTS = "DTS";
+    public const string AUDIO_CODEC_TRUEHD = "TRUEHD";
+    public const string AUDIO_CODEC_UNKNOWN = "UNKNOWN";
     public static readonly string[] ModulationSystem2String = ["undef", "dvbc", "dvbcb", "dvbt", "dss", "dvbs", "dvbs2", "dvbh", "isdbt", "isdbs", "isdbc", "atsc", "atscmh", "dtmb", "cmmb", "dab", "dvbt2", "turbo", "dvbcc", "dvbc2"];
     public static readonly string[] ModulationType2String = ["qpsk", "16qam", "32qam", "64qam", "128qam", "256qam", "autoqam", "8vsb", "16vsb", "8psk", "16apsk", "32apsk", "dqpsk", "4qamnr"];
     public static readonly string[] Polarisation2String = ["v", "h", "r", "l"];

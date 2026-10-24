@@ -7,6 +7,7 @@ public static class Enums
         video_stream_descriptor                         = 0x02,
         audio_stream_descriptor                         = 0x03,
         data_stream_alignment_descriptor                = 0x06,
+        CA_descriptor                                   = 0x09,
         ISO_639_language_descriptor                     = 0x0A,
         system_clock_descriptor                         = 0x0B,
         carousel_identifier_descriptor                  = 0x13,
@@ -32,6 +33,12 @@ public static class Enums
         AAC_descriptor                                  = 0x7C,
         XAIT_location_descriptor                        = 0x7D,
         extension_descriptor                            = 0x7F
+    }
+    public enum ScramblingState
+    {
+        Unknown     = 0,    // no packets of the probed elementary stream received
+        Clear       = 1,    // transport_scrambling_control 00 in all probed packets
+        Scrambled   = 2     // transport_scrambling_control 10/11 (even/odd key) in at least one probed packet
     }
     public enum MPEG2TSStreamType : byte
     {

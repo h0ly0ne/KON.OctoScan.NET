@@ -58,14 +58,20 @@ public static class OSTransponderInfo_Extension
                     lCurrentLogger.Info($" VPID:          {osCurrentOSService.iVideoPacketIdentifier}".Pastel(ConsoleColor.Green));
                     lCurrentLogger.Info($" APIDS:         {string.Join(",", osCurrentOSService.liAudioPacketIdentifiers)}".Pastel(ConsoleColor.Green));
 
+                    if (osCurrentOSService.lsAudioPacketIdentifiersCodec.Count > 0)
+                        lCurrentLogger.Info($" ACODECS:       {string.Join(",", osCurrentOSService.lsAudioPacketIdentifiersCodec)}".Pastel(ConsoleColor.Green));
+
                     if (osCurrentOSService.liOtherPacketIdentifiers.Count > 0)
                         lCurrentLogger.Info($" OPIDS:         {string.Join(",", osCurrentOSService.liOtherPacketIdentifiers.Select((iCurrentPID, iCurrentIndex) => $"{iCurrentPID} (0x{osCurrentOSService.lbOtherPacketIdentifiersStreamType[iCurrentIndex]:X2})"))}".Pastel(ConsoleColor.Green));
 
                     if (osCurrentOSService.iVideoPacketIdentifier == 0)
                         lCurrentLogger.Info(" RADIO:         1".Pastel(ConsoleColor.Green));
 
-                    if (osCurrentOSService.iConditionalAccessMode != 0)
+                    if (osCurrentOSService.IsEncrypted())
                         lCurrentLogger.Info(" ENC:           1".Pastel(ConsoleColor.Green));
+
+                    if (osCurrentOSService.liCASystemIDs.Count > 0)
+                        lCurrentLogger.Info($" CAIDS:         {string.Join(",", osCurrentOSService.liCASystemIDs.Select(iCurrentCASystemID => iCurrentCASystemID.ToString("X4")))}".Pastel(ConsoleColor.Green));
 
                     lCurrentLogger.Info($" EIT:           {osCurrentOSService.iEventInformationTablePresentFollowing}{osCurrentOSService.iEventInformationTableSchedule}".Pastel(ConsoleColor.Green));
                 }

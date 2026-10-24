@@ -123,6 +123,13 @@ public static class OSTransportStreamInfo_Extension
 
             opiiCurrentOSPacketIdentifierInfo.iPacketsReceived++;
 
+            // Elementary streams are only requested for the scrambling probe - their payload is no section data
+            if (opiiCurrentOSPacketIdentifierInfo.bScramblingProbe)
+            {
+                opiiCurrentOSPacketIdentifierInfo.ProbeScrambling(rosLocalPacket);
+                return;
+            }
+
             if (opiiCurrentOSPacketIdentifierInfo.byaBuffer == null)
             {
                 opiiCurrentOSPacketIdentifierInfo.byaBuffer = new byte[MAX_SECTION_LENGTH];

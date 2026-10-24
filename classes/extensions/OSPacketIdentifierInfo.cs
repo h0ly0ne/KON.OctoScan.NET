@@ -1,6 +1,7 @@
 ﻿using Pastel;
 
 using static KON.OctoScan.NET.Constants;
+using static KON.OctoScan.NET.Enums;
 using static KON.OctoScan.NET.Global;
 
 namespace KON.OctoScan.NET;
@@ -31,6 +32,44 @@ public static class OSPacketIdentifierInfo_Extension
                 opiiLocalOSPacketIdentifierInfo.Reset();
 
             return bIsValid;
+        }
+
+        /// <summary>
+        /// OSPacketIdentifierInfo.ProbeScrambling() - evaluates transport_scrambling_control of an elementary stream packet,
+        /// after SCRAMBLING_PROBE_PACKETS packets the probed services get their scrambling state
+        /// </summary>
+        /// <param name="rosLocalPacket"></param>
+        public void ProbeScrambling(ReadOnlySpan<byte> rosLocalPacket)
+        {
+            LogTrace("OSPacketIdentifierInfo.ProbeScrambling()");
+
+            // Packets without payload (adaptation field only) are never scrambled
+            if (!HasTransportStreamPayload(rosLocalPacket))
+                return;
+
+            opiiLocalOSPacketIdentifierInfo.iProbePackets++;
+
+            if ((rosLocalPacket[3] & 0xC0) != 0)
+                opiiLocalOSPacketIdentifierInfo.iProbeScrambledPackets++;
+
+            if (opiiLocalOSPacketIdentifierInfo.iProbePackets < SCRAMBLING_PROBE_PACKETS)
+                return;
+
+            var otsiCurrentOSTransportStreamInfo = opiiLocalOSPacketIdentifierInfo.otsiOSTransportStreamInfo;
+            var ssCurrentScramblingState = opiiLocalOSPacketIdentifierInfo.iProbeScrambledPackets > 0 ? ScramblingState.Scrambled : ScramblingState.Clear;
+
+            foreach (var otsfCurrentOSTransportStreamFilter in opiiLocalOSPacketIdentifierInfo.olotsfOSListOSTransportStreamFilter?.Where(otsfCurrentOSTransportStreamFilter => otsfCurrentOSTransportStreamFilter is { byTableID: TID_SCRAMBLING_PROBE, bDone: false }) ?? [])
+            {
+                var osCurrentOSService = otsiCurrentOSTransportStreamInfo?.ostOSScanTransponder?.otiOSTransponderInfo?.GetService(otsfCurrentOSTransportStreamFilter.iTableExtension);
+
+                if (osCurrentOSService != null)
+                    osCurrentOSService.ssScramblingState = ssCurrentScramblingState;
+
+                otsfCurrentOSTransportStreamFilter.bDone = true;
+            }
+
+            if (otsiCurrentOSTransportStreamInfo != null)
+                otsiCurrentOSTransportStreamInfo.bPIDListCheckRequired = true;
         }
 
         /// <summary>

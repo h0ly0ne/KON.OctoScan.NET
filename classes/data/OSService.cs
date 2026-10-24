@@ -1,4 +1,7 @@
-﻿namespace KON.OctoScan.NET;
+﻿using static KON.OctoScan.NET.Enums;
+using static KON.OctoScan.NET.Global;
+
+namespace KON.OctoScan.NET;
 
 public class OSService
 {
@@ -7,8 +10,10 @@ public class OSService
     public List<int> liAudioPacketIdentifiers = [];
     public List<byte> lbAudioPacketIdentifiersStreamType = [];
     public List<string> lsAudioPacketIdentifiersLanguage = [];
+    public List<string> lsAudioPacketIdentifiersCodec = [];
     public List<int> liOtherPacketIdentifiers = [];
     public List<byte> lbOtherPacketIdentifiersStreamType = [];
+    public List<int> liCASystemIDs = [];
 
     public string strProviderName = string.Empty;
     public string strName = string.Empty;
@@ -17,7 +22,6 @@ public class OSService
     public int iServiceID;
     public int iEventInformationTableSchedule;
     public int iEventInformationTablePresentFollowing;
-    public int iConditionalAccessMode;
     public int iRunningStatus;
     public int iTransportStreamID;
     public int iOriginalNetworkID;
@@ -27,4 +31,22 @@ public class OSService
     public byte byVideoPacketIdentifierStreamType;
     public int iSubtitlePacketIdentifier;
     public int iTeletextPacketIdentifier;
+    public ScramblingState ssScramblingState;
+
+    /// <summary>
+    /// OSService.IsEncrypted() - the measured scrambling decides, without measurement (no packets received) the
+    /// CA systems of the PMT
+    /// </summary>
+    /// <returns>bool</returns>
+    public bool IsEncrypted()
+    {
+        LogTrace("OSService.IsEncrypted()");
+
+        return ssScramblingState switch
+        {
+            ScramblingState.Scrambled => true,
+            ScramblingState.Clear => false,
+            _ => liCASystemIDs.Count > 0
+        };
+    }
 }
